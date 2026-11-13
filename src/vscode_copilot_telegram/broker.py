@@ -167,8 +167,10 @@ class Broker:
             self._poll_task.cancel()
             try:
                 await self._poll_task
-            except (asyncio.CancelledError, Exception):
-                pass
+            except asyncio.CancelledError:
+                pass  # expected: we just cancelled it
+            except Exception:
+                log.warning("the poller ended with an error while closing", exc_info=True)
 
     # ---------- polling ----------
     def _ensure_poller(self) -> None:
@@ -220,7 +222,9 @@ class Broker:
 
     # ---------- update handling ----------
     def _authorized(self, user: dict | None) -> bool:
-        return bool(user) and int(user.get("id", 0)) == self.user_id
+        if not user:
+            return False
+        return int(user.get("id", 0)) == self.user_id
 
     async def handle_update(self, upd: dict[str, Any]) -> None:
         if "callback_query" in upd:
@@ -345,14 +349,14 @@ class Broker:
     async def _ack(self, cq: dict, text: str | None) -> None:
         try:
             await self.api.answer_callback_query(cq.get("id", ""), text)
-        except TelegramError:
-            pass
+        except TelegramError as exc:
+            log.warning("could not answer the button tap: %s", exc)
 
     async def _say(self, html: str) -> None:
         try:
             await self.api.send_message(html)
-        except TelegramError:
-            pass
+        except TelegramError as exc:
+            log.warning("could not send message: %s", exc)
 
     async def _safe_edit(self, message_id: int | None, html: str | None) -> None:
         if message_id is None:

@@ -27,7 +27,8 @@ class Settings:
     block: list[str] = field(default_factory=list)
     use_default_block: bool = True
     shell: str = "default"            # default | bash | powershell | pwsh | cmd
-    log_path: Path | None = None
+    # Leave unset for the default; __post_init__ always turns it into an absolute Path.
+    log_path: Path = None  # type: ignore[assignment]
     project_name: str = ""
 
     def __post_init__(self) -> None:

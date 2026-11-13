@@ -25,4 +25,5 @@ jobs:
           cache-dependency-path: pyproject.toml
       - run: python --version
       - run: pip install -e ".[dev]"
+      - run: mypy
       - run: pytest -q

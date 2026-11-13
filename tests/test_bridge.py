@@ -1,11 +1,13 @@
 import asyncio
 import json
+import logging
 
 from conftest import USER_ID, FakeTelegram, wait_for
 
 from vscode_copilot_telegram.broker import Broker
 from vscode_copilot_telegram.config import Settings
 from vscode_copilot_telegram.bridge import Bridge
+from vscode_copilot_telegram.telegram import TelegramError
 
 
 async def _start_command(bridge, cmd="make build", **kw):
@@ -59,6 +61,22 @@ async def test_deny(make_bridge, fake_tg):
     result = await asyncio.wait_for(task, 2)
     assert result["decision"] == "denied" and result["exit_code"] is None
     assert runner.calls == []
+
+
+async def test_failed_button_answer_is_logged_and_the_decision_still_counts(make_bridge, fake_tg, monkeypatch,
+                                                                            caplog):
+    async def fail(callback_id, text=None):
+        raise TelegramError("network down")
+
+    monkeypatch.setattr(fake_tg, "answer_callback_query", fail)
+    bridge, runner = make_bridge()
+    task = await _start_command(bridge)
+    await wait_for(lambda: fake_tg.sent)
+    with caplog.at_level(logging.WARNING, logger="vscode_copilot_telegram.broker"):
+        fake_tg.tap(fake_tg.buttons()[1])
+        result = await asyncio.wait_for(task, 2)
+    assert result["decision"] == "denied" and runner.calls == []
+    assert "could not answer the button tap: network down" in caplog.text
 
 
 async def test_deny_with_note(make_bridge, fake_tg):

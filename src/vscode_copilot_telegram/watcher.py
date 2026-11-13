@@ -13,7 +13,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from .config import ConfigError, load_env_files, resolve_workspace_root, telegram_credentials
 from .masking import mask_secrets
@@ -62,12 +62,12 @@ class WatchState:
 
 
 def default_state_path(project: Path) -> Path:
-    digest = hashlib.sha1(str(project).encode("utf-8")).hexdigest()[:12]
+    digest = hashlib.sha256(str(project).encode("utf-8")).hexdigest()[:12]
     return Path.home() / ".vscode-copilot-telegram" / f"watch-{project.name}-{digest}.json"
 
 
 def _hash(text: str) -> str:
-    return hashlib.sha1(text.encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
 def format_messages(project: str, turns: list[Turn], title: str | None = None) -> list[str]:
@@ -88,7 +88,7 @@ def format_messages(project: str, turns: list[Turn], title: str | None = None) -
 
 
 class Watcher:
-    def __init__(self, project: Path, send: Callable[[str], None], state: WatchState,
+    def __init__(self, project: Path, send: Callable[[str], Any], state: WatchState,
                  storage_dirs: list[Path] | None = None, source: str = "auto", settle_s: float = 8.0,
                  include_tools: bool = True, backfill: int = 0, clock: Callable[[], float] = time.time) -> None:
         self.project = project
@@ -218,9 +218,11 @@ def main(argv: list[str] | None = None) -> None:
                 print(f"  {f}  [{when}, {len(turns)} messages]")
         return
 
+    send: Callable[[str], Any]
     if args.dry_run:
-        def send(text: str) -> None:
+        def print_message(text: str) -> None:
             print(text + "\n" + "-" * 40, flush=True)
+        send = print_message
         state = WatchState(None)
     else:
         try:

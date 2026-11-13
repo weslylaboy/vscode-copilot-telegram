@@ -152,7 +152,7 @@ If it prints `vscode-copilot-telegram: TELEGRAM_BOT_TOKEN is not set` (or `TELEG
 
 ## 7. Local vs Copilot harness sessions
 
-VS Code's chat view can run agent sessions in two "harnesses". You pick one from the session type picker in the chat view. They read MCP config from different files and handle the built-in terminal tool differently, which matters for the approval gate.
+VS Code can run agent sessions with different "harnesses". Two matter here, Local and Copilot. You pick one in the Session Target picker. They read MCP config from different files and handle the built-in terminal tool differently, which matters for the approval gate.
 
 | | **Local** harness | **Copilot** harness |
 | --- | --- | --- |
@@ -160,7 +160,7 @@ VS Code's chat view can run agent sessions in two "harnesses". You pick one from
 | Can you untick **Run in Terminal**? | Yes, in **Configure Tools** | Not always; some builds hide the built-in tools from the picker |
 | Status | Deprecated by VS Code; scheduled for removal in **February 2027** | The default going forward |
 
-**Which one to use:** while your VS Code still offers **Local** sessions, use one, because you can switch off the built-in terminal there and the gate is airtight. Create the `.mcp.json` as well (step 8). After Local is removed, the Copilot harness is the only choice, and the settings below are the normal setup, not a fallback.
+**Which one to use:** while your VS Code still offers **Local** sessions, use one, because you can switch off the built-in terminal there and the gate is airtight. Create the `.mcp.json` as well (step 8). After Local is removed, use the Copilot harness; the settings below are then the normal setup, not a fallback.
 
 **If you're in a Copilot harness session and can't untick Run in Terminal**, add these to your VS Code **User** settings (Command Palette → **Preferences: Open User Settings (JSON)**):
 

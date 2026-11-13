@@ -24,19 +24,20 @@ Python 3.11 is the minimum (`tomllib`, `Path.is_relative_to`, modern typing). CI
 ## Run the tests
 
 ```bash
-pytest -q                          # whole suite (110 tests, ~7 s)
+pytest -q                          # whole suite (112 tests, ~7 s)
 pytest -q tests/test_bridge.py     # one module
 pytest -q -k timeout               # by name
+mypy                               # type check of src/
 ```
 
 pytest options live in `pyproject.toml` under `[tool.pytest.ini_options]` (`asyncio_mode = "auto"`).
 
 | File | Covers |
 | --- | --- |
-| `tests/test_bridge.py` | Approve once and ignore second taps, answered ids surviving a restart, deny, deny with note, timeout fails closed, Telegram send failure fails closed, unauthorized users ignored, several pending at once, block list, allow list notice, cwd jail, masking in Telegram, audit log, `ask_user` options / text / timeout / reply routing, `notify` |
+| `tests/test_bridge.py` | Approve once and ignore second taps, answered ids surviving a restart, deny, deny with note, timeout fails closed, Telegram send failure fails closed, a failed button answer is logged and the decision still counts, unauthorized users ignored, several pending at once, block list, allow list notice, cwd jail, masking in Telegram, audit log, `ask_user` options / text / timeout / reply routing, `notify` |
 | `tests/test_policy.py` | Built-in block list, allow list full-match, chaining never auto-approved |
 | `tests/test_masking.py` | Each masking pattern |
-| `tests/test_runner.py` | Combined output capture, run timeout kills, token stripped from the child environment, head-and-tail truncation |
+| `tests/test_runner.py` | Combined output capture, run timeout kills, the Windows kill calls `taskkill` by full path, token stripped from the child environment, head-and-tail truncation |
 | `tests/test_workspace.py` | cwd resolution, `..` / absolute / sibling-prefix / symlink escapes, missing folders |
 | `tests/test_sessions.py` | The three chat formats (fixtures in `tests/fixtures/`), op-log replay, file URI decoding, workspaceStorage matching, message splitting and formatting, and the watcher: dedupe across restarts, settle time, no history flood, backfill, retry after send failure |
 | `tests/test_mcp_smoke.py` | Starts the real server with `python -m vscode_copilot_telegram` over stdio, lists tools, and checks that calls fail closed with Telegram pointed at a closed local port, and without credentials |
@@ -47,7 +48,7 @@ No test talks to the real Telegram API or needs a token. `VSCODE_COPILOT_TELEGRA
 
 ## CI
 
-`.github/workflows/ci.yml` (GitHub Actions) runs `pip install -e ".[dev]"` and `pytest -q` on Python 3.11 and 3.12, for every branch push and pull request. Results are in the **Actions** tab of the repository.
+`.github/workflows/ci.yml` (GitHub Actions) runs `pip install -e ".[dev]"`, `mypy`, and `pytest -q` on Python 3.11 and 3.12, for every branch push and pull request. Results are in the **Actions** tab of the repository.
 
 ## Manual testing against real Telegram
 
@@ -116,3 +117,4 @@ See [ARCHITECTURE.md → Known limitations](ARCHITECTURE.md#known-limitations). 
 4. **Better multi-window support.** One poller shared across windows (a small local daemon), removing the one-bot-per-window rule.
 5. **Packaging.** Publish to PyPI so setup is `pipx install vscode-copilot-telegram`.
 6. **Real-world fixtures** for chat formats on Windows, macOS, and VS Code Server.
+7. **Full paths for the shells on Windows.** `runner.py` starts `powershell`, `pwsh`, `cmd.exe`, and `bash` by name. For a bare name Windows looks in the server's current folder before the system folders, so a file with that name in the workspace could run in place of the real shell. `taskkill` already uses its full path; the shells need the same, and a Windows machine to test it.

@@ -12,6 +12,7 @@ Read [`AGENTS.md`](../AGENTS.md) and follow it. The points below are the rules t
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 pytest -q
+mypy
 ```
 
 - MCP server bot check (needs `TELEGRAM_BOT_TOKEN` and `TELEGRAM_USER_ID`; does not start the server): `vscode-copilot-telegram --test --workspace <dir>`

@@ -32,9 +32,10 @@ python3 -m venv .venv && source .venv/bin/activate
 # Windows: py -3 -m venv .venv; .\.venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
 pytest -q
+mypy
 ```
 
-`pytest -q` is the full suite (the current test count is in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md#run-the-tests)). Narrow with `pytest -q tests/test_bridge.py` or `pytest -q -k timeout`. Options are in `pyproject.toml` (`asyncio_mode = "auto"`).
+`pytest -q` is the full suite (the current test count is in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md#run-the-tests)). Narrow with `pytest -q tests/test_bridge.py` or `pytest -q -k timeout`. Options are in `pyproject.toml` (`asyncio_mode = "auto"`). `mypy` type-checks `src/` (settings under `[tool.mypy]` in `pyproject.toml`).
 
 Check the bot setup (needs `TELEGRAM_BOT_TOKEN` and `TELEGRAM_USER_ID`, typically in `~/.config/vscode-copilot-telegram/.env`). Sends one test message and exits; it does not start the MCP server. Without credentials it prints `vscode-copilot-telegram: TELEGRAM_BOT_TOKEN is not set` (or the matching user-id error) to stderr and exits non-zero:
 
@@ -57,8 +58,9 @@ Manual MCP Inspector and end-to-end steps are in [`docs/DEVELOPMENT.md`](docs/DE
 ## Code conventions
 
 - Python 3.11+, `from __future__ import annotations`, builtin generics (`list[str]`, `dict[str, Any]`), union with `|`. Public functions and methods are typed. Structured data uses dataclasses.
-- Runtime dependencies are only `mcp` (>=1.2), `httpx`, and `python-dotenv`. Everything else is the stdlib (`tomllib`, `asyncio`, `pathlib`, `re`, …). Dev extras: `pytest`, `pytest-asyncio`. Do not add a dependency unless there is a clear need.
+- Runtime dependencies are only `mcp` (>=1.2), `httpx`, and `python-dotenv`. Everything else is the stdlib (`tomllib`, `asyncio`, `pathlib`, `re`, …). Dev extras: `pytest`, `pytest-asyncio`, `mypy`. Do not add a dependency unless there is a clear need.
 - There is no repo formatter or linter config. Match the surrounding style: module docstrings, `logging.getLogger("vscode_copilot_telegram.<module>")`, relatively few comments.
+- `mypy` must report no errors on `src/`. The two `type: ignore` comments on the `mcp` import in `server.py` are needed because the code supports `mcp` 1.x and 2.x; check both when you touch them.
 - `bridge.py` must stay free of MCP imports. `server.py` is the only MCP-aware module.
 - The server's stdout belongs to the MCP protocol. Log only to stderr.
 - Errors use small domain exceptions (`ConfigError`, `CwdError`, `TelegramError`). On the approval path, every failure must become a deny (or `blocked` / `rejected`) with `exit_code: null` — never an uncaught exception that could be read as success. Add a test for every new failure path.
@@ -108,7 +110,7 @@ This project lives on GitHub (`https://github.com/weslylaboy/vscode-copilot-tele
 
 - Prefer a focused commit (or a short, coherent series) with an imperative subject, like the existing "Add …" / "Initial commit: …" style.
 - Every change that can break behavior needs a test. Docs-only and instruction-file changes do not.
-- `pytest -q` must pass locally. CI runs the same command on Python 3.11 and 3.12 for every branch push and pull request (`.github/workflows/ci.yml`).
+- `pytest -q` and `mypy` must pass locally. CI runs the same commands on Python 3.11 and 3.12 for every branch push and pull request (`.github/workflows/ci.yml`).
 - Do not include `.env` files, tokens, personal bot ids, or unsanitized real chat transcripts.
 - Do not rewrite published `main` history.
 

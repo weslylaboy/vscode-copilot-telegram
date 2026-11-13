@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import ntpath
 import os
 import signal
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 # Never hand our own secrets to commands Copilot runs.
 _SCRUB_ENV = ("TELEGRAM_BOT_TOKEN",)
@@ -40,8 +43,9 @@ def _child_env() -> dict[str, str]:
 
 
 async def _spawn(command: str, cwd: Path, shell: str) -> asyncio.subprocess.Process:
-    common = dict(cwd=str(cwd), stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE,
-                  stderr=asyncio.subprocess.STDOUT, env=_child_env())
+    common: dict[str, Any] = {"cwd": str(cwd), "stdin": asyncio.subprocess.DEVNULL,
+                              "stdout": asyncio.subprocess.PIPE, "stderr": asyncio.subprocess.STDOUT,
+                              "env": _child_env()}
     if sys.platform == "win32":
         common["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
     else:
@@ -57,17 +61,25 @@ async def _spawn(command: str, cwd: Path, shell: str) -> asyncio.subprocess.Proc
     return await asyncio.create_subprocess_shell(command, **common)
 
 
+def _taskkill_exe() -> str:
+    # Full path on purpose: for a bare name Windows looks in the server's current
+    # folder (often the workspace) before System32, so a taskkill.exe placed in the
+    # project would run instead of the real one.
+    root = os.environ.get("SYSTEMROOT") or r"C:\Windows"
+    return ntpath.join(root, "System32", "taskkill.exe")
+
+
 def _kill_tree(proc: asyncio.subprocess.Process) -> None:
     try:
         if sys.platform == "win32":
-            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
+            # Fixed program and arguments; the only variable part is our own child's pid.
+            subprocess.run([_taskkill_exe(), "/T", "/F", "/PID", str(proc.pid)],  # noqa: S603
+                           capture_output=True)
         else:
             os.killpg(proc.pid, signal.SIGKILL)
     except (ProcessLookupError, PermissionError, OSError):
-        try:
+        with contextlib.suppress(ProcessLookupError):  # already gone
             proc.kill()
-        except ProcessLookupError:
-            pass
 
 
 async def run_command(command: str, cwd: Path, timeout_s: float, shell: str = "default") -> RunResult:

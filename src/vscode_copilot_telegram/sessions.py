@@ -279,6 +279,7 @@ def _str(v: Any) -> str | None:
 
 
 def _uri_basename(u: Any) -> str | None:
+    path: Any
     if isinstance(u, str):
         path = file_uri_to_path(u) or u
     elif isinstance(u, dict):
@@ -406,7 +407,9 @@ def turns_from_transcript(path: Path, include_tools: bool = True) -> list[Turn]:
         if not isinstance(ev, dict):
             continue
         etype = ev.get("type")
-        data = ev.get("data") if isinstance(ev.get("data"), dict) else ev
+        data = ev.get("data")
+        if not isinstance(data, dict):
+            data = ev
         key = str(ev.get("id") or data.get("messageId") or f"line{n}")
         if etype == "user.message":
             text = _str(data.get("content")) or _str(data.get("text")) or _str(data.get("message")) or ""

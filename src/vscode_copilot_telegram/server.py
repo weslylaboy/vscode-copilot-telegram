@@ -17,7 +17,7 @@ from typing import Annotated, Any
 try:  # mcp >= 2.0
     from mcp.server import MCPServer as _Server  # type: ignore[attr-defined]
 except ImportError:  # mcp 1.x
-    from mcp.server.fastmcp import FastMCP as _Server  # type: ignore[no-redef]
+    from mcp.server.fastmcp import FastMCP as _Server  # type: ignore[no-redef,attr-defined]
 
 from pydantic import Field
 

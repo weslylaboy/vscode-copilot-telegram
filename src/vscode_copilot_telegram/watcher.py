@@ -15,7 +15,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from .config import ConfigError, load_env_files, resolve_workspace_root, telegram_credentials
+from .config import (ConfigError, ignored_project_env_names, load_env_files, resolve_workspace_root,
+                     telegram_credentials)
 from .masking import mask_secrets
 from .sessions import Turn, find_workspace_storage, session_files, session_title, turns_for_file
 from .telegram import TelegramError, TelegramSender, split_message
@@ -197,7 +198,12 @@ def main(argv: list[str] | None = None) -> None:
                         format="%(asctime)s vscode-copilot-telegram-watch %(levelname)s %(message)s")
 
     project = resolve_workspace_root(args.workspace)
-    load_env_files(project)
+    load_env_files()
+    ignored = ignored_project_env_names(project)
+    if ignored:
+        log.warning("%s sets %s, but the project .env is never read. Put these in "
+                    "~/.config/vscode-copilot-telegram/.env or in the file named by "
+                    "VSCODE_COPILOT_TELEGRAM_ENV_FILE.", project / ".env", ", ".join(ignored))
     storage = [Path(s).expanduser() for s in args.storage] if args.storage else None
 
     if args.list:

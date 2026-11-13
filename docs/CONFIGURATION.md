@@ -26,10 +26,11 @@ Nothing secret ever goes in the TOML file; the server refuses to start its tools
 Both programs call the same loader at startup. It reads these files in order and **never overrides a variable that is already set** (so a real environment variable beats every file, and an earlier file beats a later one):
 
 1. `$VSCODE_COPILOT_TELEGRAM_ENV_FILE`
-2. `<workspace>/.env`
-3. `~/.config/vscode-copilot-telegram/.env` (Windows: `%USERPROFILE%\.config\vscode-copilot-telegram\.env`)
+2. `~/.config/vscode-copilot-telegram/.env` (Windows: `%USERPROFILE%\.config\vscode-copilot-telegram\.env`)
 
-Missing files are skipped. Note that variables from `<workspace>/.env` (your project's own `.env`, if it has one) end up in the server's environment and therefore in the environment of approved commands, except `TELEGRAM_BOT_TOKEN`, which is always stripped.
+Missing files are skipped.
+
+`<workspace>/.env` (your project's own `.env`) is **never loaded**. Copilot can edit files in the project without approval, and a cloned repository can bring its own `.env`, so that file must not be able to set the Telegram credentials, the Bot API address, or the audit log path. If it contains `TELEGRAM_*`, `VSCODE_COPILOT_TELEGRAM_*`, or `LOG_PATH`, both programs log a warning with the names and ignore them. To give one project its own bot, keep a file outside the project (for example `~/.config/vscode-copilot-telegram/your-project.env`) and point `VSCODE_COPILOT_TELEGRAM_ENV_FILE` at it. See [SECURITY.md → Project files that can change the gate](../SECURITY.md#project-files-that-can-change-the-gate).
 
 ### Ways to supply the token
 
@@ -44,18 +45,33 @@ Missing files are skipped. Note that variables from `<workspace>/.env` (your pro
 
 Place it at `<workspace>/vscode-copilot-telegram.toml` (the folder passed as `--workspace`). Copy [`examples/vscode-copilot-telegram.toml`](../examples/vscode-copilot-telegram.toml) to start. Unknown keys are an error, so typos don't fail silently. Changes take effect when the MCP server restarts (MCP: List Servers → Restart).
 
+This file lives in the project, so anything that can write to the project can change it, including Copilot's file edits. For that reason an `allow` list and `use_default_block = false` only work after **you accept them** (see [Accepting the allow list](#accepting-the-allow-list)). Everything else in this file is trusted as written. See [SECURITY.md → Project files that can change the gate](../SECURITY.md#project-files-that-can-change-the-gate).
+
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `timeout_s` | int > 0 | `600` | Seconds to wait for **Approve/Deny** or an answer to `ask_user`. No answer means **denied** (or `timeout` for questions). Copilot can pass a per-call `timeout_s`, capped at 24 h. |
 | `run_timeout_s` | int > 0 | `900` | An approved command is killed (with its whole process tree) after this many seconds. |
 | `max_output_chars` | int > 0 | `8000` | Combined stdout+stderr returned to Copilot. Longer output keeps the first quarter and the end, with a `[N characters truncated]` marker. |
 | `telegram_output_chars` | int | `1500` | How much of the output tail is shown in the Telegram message (also limited by Telegram's 4096-character message size). |
-| `allow` | list of regex | `[]` | Commands auto-approved without asking (you still get a notice). See below. |
+| `allow` | list of regex | `[]` | Commands auto-approved without asking (you still get a notice). Ignored until you accept it. See below. |
 | `block` | list of regex | `[]` | Extra patterns denied without asking, added to the built-in list. |
-| `use_default_block` | bool | `true` | Set to `false` to drop the built-in block list (not recommended). |
+| `use_default_block` | bool | `true` | Set to `false` to drop the built-in block list (not recommended). Ignored until you accept it. |
 | `shell` | string | `"default"` | How commands are run: `default` (the OS shell: `/bin/sh` on macOS/Linux, `cmd.exe` on Windows), `sh`, `bash`, `powershell`, `pwsh`, or `cmd`. Use `powershell` or `pwsh` on Windows if Copilot writes PowerShell syntax. |
 | `log_path` | path | `.vscode-copilot-telegram/audit.jsonl` | Audit log location; relative to the workspace. `LOG_PATH` overrides it. |
 | `project_name` | string | workspace folder name | Label shown in brackets at the start of every Telegram message. Useful when several projects share a chat. |
+
+### Accepting the allow list
+
+An allow list makes commands run without your tap, and turning off the built-in block list removes a safety net. Because this file can be written by Copilot (file edits aren't gated) or come with a repository you cloned, these two settings are **ignored until you accept them**:
+
+```bash
+vscode-copilot-telegram --accept-policy --workspace /path/to/your/project     # full path to the venv executable
+```
+
+- Type it yourself in a terminal. It shows the patterns, asks you to type `accept`, and refuses to run from a script, a pipe, or `run_command` (the built-in block list also denies a `run_command` that contains it).
+- It saves the accepted allow list for that workspace in `~/.config/vscode-copilot-telegram/accepted-policy.json`, outside the project. Restart the MCP server afterwards.
+- If the file's `allow` list or `use_default_block` is **different** from what you accepted (any pattern added, removed, or changed), the whole thing is ignored again: the allow list is empty, the built-in block list is on, and every command asks in Telegram. The server output shows a warning with the command to run, and each approval message says the allow list is not accepted.
+- `block`, the timeouts, `shell`, and the other keys don't need acceptance, because they can't make a command run without your tap.
 
 ### Allow list rules
 
@@ -113,8 +129,9 @@ The block list is a safety net, not a sandbox. A determined or confused model ca
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `--workspace PATH` | `$WORKSPACE_ROOT`, then the current directory | Workspace root: the command jail, where `vscode-copilot-telegram.toml` and `.env` are read, and where `.vscode-copilot-telegram/` state lives. |
+| `--workspace PATH` | `$WORKSPACE_ROOT`, then the current directory | Workspace root: the command jail, where `vscode-copilot-telegram.toml` is read, and where `.vscode-copilot-telegram/` state lives. |
 | `--test` | off | Send one test message to Telegram, print `sent`, and exit (exit code 0 on success, 1 on failure). Doesn't start the MCP server. |
+| `--accept-policy` | off | Show the `allow` list and `use_default_block` from `vscode-copilot-telegram.toml`, ask you to type `accept`, and save them as accepted for the workspace. Needs a terminal; doesn't start the MCP server. See [Accepting the allow list](#accepting-the-allow-list). |
 | `--log-level LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, or `ERROR`. Logs go to stderr, which VS Code shows in the server's output channel. |
 
 ### Tools exposed to Copilot
@@ -148,6 +165,7 @@ The block list is a safety net, not a sandbox. A determined or confused model ca
 | --- | --- | --- |
 | `~/.config/vscode-copilot-telegram/.env` | you | Token and user id |
 | `<workspace>/vscode-copilot-telegram.toml` | you | Optional behaviour settings |
+| `~/.config/vscode-copilot-telegram/accepted-policy.json` | `--accept-policy` | The allow lists you accepted, per workspace |
 | `<workspace>/.vscode-copilot-telegram/audit.jsonl` | server | One JSON line per request: `ts`, `request_id`, `type`, `command`, `decision`, `exit_code`, `cwd`, `reason`, `note`, … (secrets masked) |
 | `<workspace>/.vscode-copilot-telegram/broker-state.json` | server | Telegram update offset and the last 500 answered request ids (makes buttons single-use across restarts) |
 | `~/.vscode-copilot-telegram/watch-<project>-<hash>.json` | watcher | Which chat messages were already forwarded |

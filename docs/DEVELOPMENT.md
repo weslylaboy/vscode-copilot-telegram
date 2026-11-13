@@ -24,7 +24,7 @@ Python 3.11 is the minimum (`tomllib`, `Path.is_relative_to`, modern typing). CI
 ## Run the tests
 
 ```bash
-pytest -q                          # whole suite (112 tests, ~7 s)
+pytest -q                          # whole suite (130 tests, ~7 s)
 pytest -q tests/test_bridge.py     # one module
 pytest -q -k timeout               # by name
 mypy                               # type check of src/
@@ -35,10 +35,11 @@ pytest options live in `pyproject.toml` under `[tool.pytest.ini_options]` (`asyn
 | File | Covers |
 | --- | --- |
 | `tests/test_bridge.py` | Approve once and ignore second taps, answered ids surviving a restart, deny, deny with note, timeout fails closed, Telegram send failure fails closed, a failed button answer is logged and the decision still counts, unauthorized users ignored, several pending at once, block list, allow list notice, cwd jail, masking in Telegram, audit log, `ask_user` options / text / timeout / reply routing, `notify` |
-| `tests/test_policy.py` | Built-in block list, allow list full-match, chaining never auto-approved |
+| `tests/test_policy.py` | Built-in block list (including the accept command and the accepted file), allow list full-match, chaining never auto-approved |
 | `tests/test_masking.py` | Each masking pattern |
 | `tests/test_runner.py` | Combined output capture, run timeout kills, the Windows kill calls `taskkill` by full path, token stripped from the child environment, head-and-tail truncation |
 | `tests/test_workspace.py` | cwd resolution, `..` / absolute / sibling-prefix / symlink escapes, missing folders |
+| `tests/test_config.py` | The project `.env` is never loaded (credentials, API address, audit log path), the names it would have set are reported, the `.env` load order outside the project, and the allow list: ignored until accepted, ignored again when the file changes, accepted per workspace, and `--accept-policy` refusing without a terminal or without typing `accept` |
 | `tests/test_sessions.py` | The three chat formats (fixtures in `tests/fixtures/`), op-log replay, file URI decoding, workspaceStorage matching, message splitting and formatting, and the watcher: dedupe across restarts, settle time, no history flood, backfill, retry after send failure |
 | `tests/test_mcp_smoke.py` | Starts the real server with `python -m vscode_copilot_telegram` over stdio, lists tools, and checks that calls fail closed with Telegram pointed at a closed local port, and without credentials |
 
@@ -71,6 +72,7 @@ The automated tests use a fake Telegram and hand-made session fixtures. As of 0.
 - **Real chat session files** from current VS Code / Copilot Chat builds on Windows and macOS (the fixtures model the formats described below), including VS Code Server paths for tunnels.
 - **Windows specifics**: `cmd.exe` / PowerShell quoting through `run_command`, `taskkill /T` process-tree kill, Task Scheduler with `pythonw.exe`.
 - **macOS launchd** agent and privacy (TCC) prompts.
+- **`--accept-policy`** in a real terminal on each OS (the tests cover the logic with an injected prompt; I ran it once in a pseudo-terminal on macOS).
 - **Linux systemd** user service for the watcher.
 
 Treat the first real run as the integration test, and please add regression tests or fixtures for anything that breaks.

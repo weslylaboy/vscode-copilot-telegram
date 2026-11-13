@@ -22,7 +22,8 @@ except ImportError:  # mcp 1.x
 from pydantic import Field
 
 from .broker import Broker
-from .config import ConfigError, load_env_files, load_settings, resolve_workspace_root, telegram_credentials
+from .config import (ConfigError, accept_policy, ignored_project_env_names, load_env_files, load_settings,
+                     resolve_workspace_root, telegram_credentials)
 from .bridge import Bridge
 from .telegram import TelegramAPI
 
@@ -100,8 +101,15 @@ async def notify(
 
 def build_bridge(workspace: str | None) -> Bridge:
     root = resolve_workspace_root(workspace)
-    load_env_files(root)
+    load_env_files()
+    ignored = ignored_project_env_names(root)
+    if ignored:
+        log.warning("%s sets %s, but the project .env is never read. Put these in "
+                    "~/.config/vscode-copilot-telegram/.env or in the file named by "
+                    "VSCODE_COPILOT_TELEGRAM_ENV_FILE.", root / ".env", ", ".join(ignored))
     settings = load_settings(root)
+    if settings.policy_warning:
+        log.warning("%s", settings.policy_warning)
     creds = telegram_credentials()
     # VSCODE_COPILOT_TELEGRAM_API_BASE is only for tests / self-hosted Bot API servers.
     api = TelegramAPI(creds.token, creds.user_id,
@@ -116,8 +124,14 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--workspace", help="Workspace root (default: $WORKSPACE_ROOT or the current directory)")
     parser.add_argument("--test", action="store_true",
                         help="Send a test message to Telegram and exit (does not start the MCP server)")
+    parser.add_argument("--accept-policy", action="store_true",
+                        help="Review and accept the allow list in vscode-copilot-telegram.toml (type it yourself "
+                             "in a terminal; does not start the MCP server)")
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args(argv)
+
+    if args.accept_policy:
+        sys.exit(accept_policy(resolve_workspace_root(args.workspace)))
 
     # stdout belongs to the MCP protocol; log only to stderr.
     logging.basicConfig(level=args.log_level.upper(), stream=sys.stderr,

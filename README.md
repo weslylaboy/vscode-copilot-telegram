@@ -52,7 +52,7 @@ Everything is outbound HTTPS to Telegram, so you don't need open ports, a public
 
 - **Approve commands on your phone.** Each request shows the project, the command, the working folder, and Copilot's reason, with **✅ Approve**, **❌ Deny**, and **📝 Deny with note** buttons. Your note goes back to Copilot.
 - **Fail closed.** If you deny, don't answer before the timeout (10 minutes by default), Telegram can't be reached, or the server is misconfigured, the command doesn't run. The one exception: a command that matches your allow list still runs when Telegram can't be reached (the allow list is empty by default).
-- **Block list and allow list.** Dangerous commands, like `rm -rf /` or a forced `git push`, are denied without asking. Commands you trust, like `git status`, can be auto-approved, and you still get a notice. A command that chains other commands (`;`, `&&`, `|`, and similar) is never auto-approved.
+- **Block list and allow list.** Dangerous commands, like `rm -rf /` or a forced `git push`, are denied without asking. Commands you trust, like `git status`, can be auto-approved, and you still get a notice. You switch that on yourself with `--accept-policy` in your terminal, so an edit to the project file by Copilot can't turn it on. A command that chains other commands (`;`, `&&`, `|`, and similar) is never auto-approved.
 - **Only you can answer.** Messages and taps from any other Telegram user are ignored. Each button works once, even after a restart.
 - **Secrets masked, everything logged.** Tokens, keys, and passwords are masked before anything is sent to Telegram or written to the audit log (`.vscode-copilot-telegram/audit.jsonl`), which records every request and decision.
 - **Questions and chat mirror.** Copilot can ask you a question with `ask_user` (answer buttons or a typed reply). The watcher sends your prompts and Copilot's replies to the same chat.
@@ -103,7 +103,7 @@ Then go through the [verification checklist](docs/SETUP.md#12-end-to-end-verific
 
 ## Important limitations
 
-Know these two before you rely on it: **file edits aren't gated** (Copilot writes files with its own edit tools, so review them with `git diff` and work on a branch), and **the gate only works while Copilot's built-in Run in Terminal is off**. The project also hasn't been tested yet against a live Telegram and a live VS Code; the open items are in [To do](#to-do).
+Know these two before you rely on it: **file edits aren't gated** (Copilot writes files with its own edit tools, so review them with `git diff` and work on a branch), and **the gate only works while Copilot's built-in Run in Terminal is off**. The project also hasn't been tested yet against a live Telegram and a live VS Code; the open items are in [To do](#to-do). Which files in the project can change how the gate works is listed in [SECURITY.md](SECURITY.md#project-files-that-can-change-the-gate).
 
 The full list is in [ARCHITECTURE.md → Known limitations](docs/ARCHITECTURE.md#known-limitations), and [SECURITY.md](SECURITY.md#what-is-and-isnt-gated) shows what is and isn't gated.
 
@@ -121,6 +121,7 @@ The automated tests use a fake Telegram and sample files. These still need a rea
 - [ ] **Windows:** `cmd.exe` and PowerShell quoting in `run_command`, killing the whole process tree, and Task Scheduler with `pythonw.exe`.
 - [ ] **macOS:** the launchd agent and the privacy prompts.
 - [ ] **Linux:** the systemd user service.
+- [ ] **`--accept-policy`** in a real terminal on Windows, macOS, and Linux, including the terminal inside VS Code.
 - [ ] **The full [verification checklist](docs/SETUP.md#12-end-to-end-verification-checklist)** on each OS.
 
 ### Left to do
@@ -128,6 +129,8 @@ The automated tests use a fake Telegram and sample files. These still need a rea
 - [ ] Add a `preToolUse` hook that blocks the built-in terminal, so the gate also holds in Copilot harness sessions. This matters more once VS Code removes Local sessions ([SETUP §7](docs/SETUP.md#7-local-vs-copilot-harness-sessions)).
 - [ ] Approval for file edits (today only shell commands are gated).
 - [ ] One poller shared by several VS Code windows, to remove the one-bot-per-window rule.
+- [ ] Full paths for the shells on Windows (`powershell`, `pwsh`, `cmd.exe`, `bash`), so a file with that name in the project can't run in place of the real shell. `taskkill` already uses its full path.
+- [ ] Publish to PyPI, so the install is `pipx install vscode-copilot-telegram`.
 - [ ] Slack and Discord as other ways to approve.
 
 ### To improve

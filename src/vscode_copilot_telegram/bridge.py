@@ -111,6 +111,8 @@ class Bridge:
         header = (f"{self.tag} 🖥 <b>Run command?</b>\n<pre>{shown_cmd}</pre>\n"
                   f"<b>Why:</b> {h(mask_secrets(reason))[:600]}\n<b>cwd:</b> <code>{h(rel)}</code>\n"
                   f"<b>id:</b> <code>{rid}</code>")
+        if self.s.policy_warning:
+            header += "\n⚠️ <i>The allow list in the project file is not accepted, so it is ignored.</i>"
 
         if verdict.verdict is Verdict.BLOCK:
             try:

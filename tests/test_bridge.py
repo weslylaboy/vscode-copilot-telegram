@@ -161,6 +161,15 @@ async def test_allow_list_auto_approves_with_notice(make_bridge, fake_tg):
     assert "Auto-approved" in fake_tg.sent[0]["text"] and fake_tg.sent[0]["markup"] is None
 
 
+async def test_approval_message_says_when_the_allow_list_is_not_accepted(make_bridge, fake_tg):
+    bridge, runner = make_bridge(policy_warning="not accepted")
+    task = await _start_command(bridge, "npm test")
+    await wait_for(lambda: fake_tg.sent)
+    assert "not accepted, so it is ignored" in fake_tg.sent[0]["text"]
+    fake_tg.tap(fake_tg.buttons()[1])
+    assert (await asyncio.wait_for(task, 2))["decision"] == "denied"
+
+
 async def test_cwd_outside_workspace_rejected(make_bridge, fake_tg):
     bridge, runner = make_bridge()
     result = await bridge.run_command("ls", "look", cwd="..")

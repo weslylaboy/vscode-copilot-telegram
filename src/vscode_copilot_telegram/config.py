@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+import json
 import os
+import re
+import sys
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 
 CONFIG_FILENAME = "vscode-copilot-telegram.toml"
+ACCEPTED_POLICY_FILENAME = "accepted-policy.json"
+# Names in a project .env that would change how this tool works. That file is never loaded.
+_OWN_ENV_PREFIXES = ("TELEGRAM_", "VSCODE_COPILOT_TELEGRAM_")
+_OWN_ENV_NAMES = ("LOG_PATH",)
 
 
 class ConfigError(RuntimeError):
@@ -30,6 +38,8 @@ class Settings:
     # Leave unset for the default; __post_init__ always turns it into an absolute Path.
     log_path: Path = None  # type: ignore[assignment]
     project_name: str = ""
+    # Set by load_settings when the project file asks for auto-approval that you have not accepted.
+    policy_warning: str = ""
 
     def __post_init__(self) -> None:
         self.workspace_root = Path(self.workspace_root).expanduser().resolve()
@@ -52,19 +62,34 @@ class TelegramCredentials:
     user_id: int
 
 
-def load_env_files(workspace_root: Path) -> None:
-    """Load untracked .env files without overriding variables that are already set.
+def load_env_files() -> None:
+    """Load .env files from outside the project, without overriding variables that are already set.
 
-    Order: $VSCODE_COPILOT_TELEGRAM_ENV_FILE, <workspace>/.env, ~/.config/vscode-copilot-telegram/.env
+    Order: $VSCODE_COPILOT_TELEGRAM_ENV_FILE, ~/.config/vscode-copilot-telegram/.env
+
+    <workspace>/.env is never loaded: anything that can write to the project (Copilot's
+    file edits, a cloned repository) could use it to replace the Telegram credentials or
+    the Bot API address, and so decide who approves commands.
     """
     candidates = []
     if os.environ.get("VSCODE_COPILOT_TELEGRAM_ENV_FILE"):
         candidates.append(Path(os.environ["VSCODE_COPILOT_TELEGRAM_ENV_FILE"]).expanduser())
-    candidates.append(Path(workspace_root) / ".env")
     candidates.append(Path.home() / ".config" / "vscode-copilot-telegram" / ".env")
     for c in candidates:
         if c.is_file():
             load_dotenv(c, override=False)
+
+
+def ignored_project_env_names(workspace_root: Path) -> list[str]:
+    """Names of this tool's settings found in <workspace>/.env, so callers can say they were ignored."""
+    path = Path(workspace_root) / ".env"
+    if not path.is_file():
+        return []
+    try:
+        names = list(dotenv_values(path))
+    except (OSError, UnicodeDecodeError):
+        return []
+    return sorted(n for n in names if n.startswith(_OWN_ENV_PREFIXES) or n in _OWN_ENV_NAMES)
 
 
 def telegram_credentials() -> TelegramCredentials:
@@ -86,7 +111,8 @@ def resolve_workspace_root(cli_value: str | None = None) -> Path:
     return Path(raw).expanduser().resolve()
 
 
-def load_settings(workspace_root: Path) -> Settings:
+def _load_raw_settings(workspace_root: Path) -> Settings:
+    """Read the project TOML and the environment. Does not check whether the allow list was accepted."""
     data: dict = {}
     cfg = Path(workspace_root) / CONFIG_FILENAME
     if cfg.is_file():
@@ -110,3 +136,104 @@ def load_settings(workspace_root: Path) -> Settings:
         if int(getattr(s, name)) <= 0:
             raise ConfigError(f"{name} must be positive")
     return s
+
+
+# ---------- accepted policy ----------
+# An allow list, or turning off the built-in block list, makes commands run without a tap. The
+# project file can be written by Copilot or brought by a cloned repository, so those two settings
+# only count after you accept them yourself with `vscode-copilot-telegram --accept-policy`. The
+# accepted copy lives outside the project.
+
+def accepted_policy_path() -> Path:
+    return Path.home() / ".config" / "vscode-copilot-telegram" / ACCEPTED_POLICY_FILENAME
+
+
+def _policy(allow: list[str], use_default_block: bool) -> dict:
+    # Order has no effect (any match allows), so compare without it.
+    return {"allow": sorted(set(allow)), "use_default_block": bool(use_default_block)}
+
+
+def policy_needs_acceptance(s: Settings) -> bool:
+    return bool(s.allow) or not s.use_default_block
+
+
+def _read_accepted() -> dict:
+    try:
+        workspaces = json.loads(accepted_policy_path().read_text("utf-8")).get("workspaces")
+    except (OSError, ValueError, AttributeError):
+        return {}
+    return workspaces if isinstance(workspaces, dict) else {}
+
+
+def is_policy_accepted(workspace_root: Path, allow: list[str], use_default_block: bool) -> bool:
+    return _read_accepted().get(str(workspace_root)) == _policy(allow, use_default_block)
+
+
+def save_accepted_policy(workspace_root: Path, allow: list[str], use_default_block: bool) -> Path:
+    path = accepted_policy_path()
+    workspaces = _read_accepted()
+    workspaces[str(workspace_root)] = _policy(allow, use_default_block)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"version": 1, "workspaces": workspaces}, indent=2), "utf-8")
+    try:
+        tmp.chmod(0o600)
+    except OSError:
+        pass  # not supported on every file system
+    tmp.replace(path)
+    return path
+
+
+def load_settings(workspace_root: Path) -> Settings:
+    s = _load_raw_settings(workspace_root)
+    if policy_needs_acceptance(s) and not is_policy_accepted(s.workspace_root, s.allow, s.use_default_block):
+        what = " and ".join(x for x in (f"an allow list with {len(s.allow)} pattern(s)" if s.allow else "",
+                                         "use_default_block = false" if not s.use_default_block else "") if x)
+        s.policy_warning = (f"{CONFIG_FILENAME} sets {what}, but you have not accepted it, so it is ignored: "
+                            "every command asks in Telegram and the built-in block list stays on. Read the "
+                            "file, then run in your own terminal: "
+                            f"vscode-copilot-telegram --accept-policy --workspace {s.workspace_root}")
+        s.allow = []
+        s.use_default_block = True
+    return s
+
+
+def accept_policy(workspace_root: Path, *, ask: Callable[[str], str] = input,
+                  interactive: bool | None = None) -> int:
+    """Show the allow list from the project file and, if you type "accept", remember it. Returns an exit code."""
+    root = Path(workspace_root).expanduser().resolve()
+    if interactive is None:
+        interactive = sys.stdin.isatty() and sys.stdout.isatty()
+    if not interactive:
+        print("vscode-copilot-telegram: --accept-policy must be run by you, typing it in a terminal. "
+              "It does not run from scripts, pipes, or run_command.", file=sys.stderr)
+        return 1
+    try:
+        s = _load_raw_settings(root)
+        for pattern in s.allow:
+            re.compile(pattern)
+    except (ConfigError, ValueError, re.error) as exc:
+        print(f"vscode-copilot-telegram: {exc}", file=sys.stderr)
+        return 1
+    if not policy_needs_acceptance(s):
+        print(f"Nothing to accept for {root}: no allow list, and the built-in block list is on.")
+        return 0
+    print(f"Workspace: {root}\nFile:      {root / CONFIG_FILENAME}\n")
+    if s.allow:
+        print("These commands will run WITHOUT asking you (each pattern must match the whole command; "
+              "commands with ; && || | ` $( > < or a newline still ask):")
+        for pattern in s.allow:
+            print(f"  {pattern}")
+    if not s.use_default_block:
+        print("The built-in block list (rm -rf /, force push, curl | sh, ...) will be OFF.")
+    print("\nIf this file was written by Copilot, or came with a repository you cloned, read it before you accept.")
+    try:
+        answer = ask("Type 'accept' to trust this for this workspace: ")
+    except EOFError:
+        answer = ""
+    if answer.strip().lower() != "accept":
+        print("Not accepted. Nothing was saved.")
+        return 1
+    path = save_accepted_policy(s.workspace_root, s.allow, s.use_default_block)
+    print(f"Saved to {path}.\nRestart the MCP server (MCP: List Servers -> Restart) for it to apply.")
+    return 0

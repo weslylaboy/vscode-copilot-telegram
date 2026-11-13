@@ -6,9 +6,21 @@ Start with the logs:
 - **Watcher:** the terminal you started it in, `~/Library/Logs/vscode-copilot-telegram-watch.log` with the launchd setup, or `journalctl --user -u vscode-copilot-telegram-watch-your-project.service` with the systemd setup. Add `-v` for debug output.
 - **Audit log:** `<workspace>/.vscode-copilot-telegram/audit.jsonl` records every request and decision.
 
-Contents: [No messages at all](#no-telegram-messages-at-all) · [Buttons don't respond](#buttons-dont-respond-or-say-expired) · [Several VS Code windows (409 Conflict)](#several-vs-code-windows-409-conflict) · [Watcher finds no sessions](#the-watcher-finds-no-sessions) · [Watcher sends nothing](#the-watcher-runs-but-sends-nothing) · [Copilot still uses the built-in terminal](#copilot-still-uses-the-built-in-terminal) · [Server doesn't appear](#the-server-doesnt-show-up-in-copilot) · [Wrong Copilot account](#copilot-uses-the-wrong-github-account) · [Blocked tunnels](#remote-tunnels-are-blocked-by-your-company) · [Commands fail on Windows](#commands-fail-on-windows-with-syntax-errors)
+Contents: [The allow list does nothing](#the-allow-list-does-nothing) · [No messages at all](#no-telegram-messages-at-all) · [Buttons don't respond](#buttons-dont-respond-or-say-expired) · [Several VS Code windows (409 Conflict)](#several-vs-code-windows-409-conflict) · [Watcher finds no sessions](#the-watcher-finds-no-sessions) · [Watcher sends nothing](#the-watcher-runs-but-sends-nothing) · [Copilot still uses the built-in terminal](#copilot-still-uses-the-built-in-terminal) · [Server doesn't appear](#the-server-doesnt-show-up-in-copilot) · [Wrong Copilot account](#copilot-uses-the-wrong-github-account) · [Blocked tunnels](#remote-tunnels-are-blocked-by-your-company) · [Commands fail on Windows](#commands-fail-on-windows-with-syntax-errors)
 
 ---
+
+## The allow list does nothing
+
+Commands that match your `allow` list still ask in Telegram, and the approval message says *The allow list in the project file is not accepted, so it is ignored.* The server output (MCP: List Servers → Show Output) has a warning that starts with `vscode-copilot-telegram.toml sets an allow list …`.
+
+An allow list (or `use_default_block = false`) only works after you accept it, and it must be exactly what you accepted. Open the file and read the patterns, then run this yourself in a terminal (not through Copilot):
+
+```bash
+vscode-copilot-telegram --accept-policy --workspace /path/to/your/project     # full path to the venv executable
+```
+
+Type `accept`, then restart the MCP server (MCP: List Servers → Restart). It refuses to run without a terminal ("must be run by you"). If the warning appears and you did not change the file, check `git diff` first: something edited the list.
 
 ## No Telegram messages at all
 
@@ -20,7 +32,7 @@ vscode-copilot-telegram --test --workspace /path/to/project     # full path to t
 
 | Output | Cause | Fix |
 | --- | --- | --- |
-| `vscode-copilot-telegram: TELEGRAM_BOT_TOKEN is not set` (or `TELEGRAM_USER_ID`) | No `.env` found | Create `~/.config/vscode-copilot-telegram/.env` ([SETUP §5](SETUP.md#5-save-the-token-and-user-id)). On Windows, check the file isn't saved as `.env.txt` (`dir -Force $HOME\.config\vscode-copilot-telegram`) and has no BOM. |
+| `vscode-copilot-telegram: TELEGRAM_BOT_TOKEN is not set` (or `TELEGRAM_USER_ID`) | No `.env` found, or the credentials are only in the project's own `.env`, which is never read (the output then also shows `the project .env is never read`) | Create `~/.config/vscode-copilot-telegram/.env` ([SETUP §5](SETUP.md#5-save-the-token-and-user-id)). On Windows, check the file isn't saved as `.env.txt` (`dir -Force $HOME\.config\vscode-copilot-telegram`) and has no BOM. |
 | `TELEGRAM_USER_ID must be a number` | You used your @username | Use the numeric id from @userinfobot. |
 | `error: could not send to Telegram (Telegram error 401: Unauthorized)` | Wrong or revoked token | Copy the token again from @BotFather (`/mybots` → your bot → API Token). |
 | `… (Telegram error 400: Bad Request: chat not found)` | You never pressed **Start** in the bot's chat, or the user id is wrong | Open your bot, tap **Start**, and check the id. |
@@ -55,7 +67,7 @@ Telegram allows **one** `getUpdates` poller per bot. If two VS Code windows each
 another process is polling this bot (409 Conflict). Use one bot per open VS Code window, and never poll from the watcher.
 ```
 
-Fix: create one bot per window or project with @BotFather, and give each project its own token. A project-level `PROJECT/.env` (git-ignored) or `VSCODE_COPILOT_TELEGRAM_ENV_FILE` set in that project's MCP config `env` works well for this. Set `project_name` in each project's `vscode-copilot-telegram.toml` so you can tell them apart.
+Fix: create one bot per window or project with @BotFather, and give each project its own token. Keep each project's token in its own file outside the project (for example `~/.config/vscode-copilot-telegram/your-project.env`), and set `VSCODE_COPILOT_TELEGRAM_ENV_FILE` to that file in the project's MCP config `env` and in the environment of that project's watcher. A `.env` inside the project is not read. Set `project_name` in each project's `vscode-copilot-telegram.toml` so you can tell them apart.
 
 Also check for leftover processes: a crashed VS Code can leave a `vscode-copilot-telegram` process behind. Windows: `Get-Process vscode-copilot-telegram`; macOS: `pgrep -fl vscode-copilot-telegram`. Stop any you don't expect. Webhooks also conflict: if the bot was ever used with a webhook, open `https://api.telegram.org/bot<TOKEN>/deleteWebhook` once.
 

@@ -10,6 +10,8 @@ log_path = ".vscode-copilot-telegram/audit.jsonl"
 
 # Regexes that must match the WHOLE command. Commands containing ; && || | ` $( > < or a
 # newline are never auto-approved. Auto-approved commands still post a notice to Telegram.
+# The allow list is ignored until YOU accept it: run `vscode-copilot-telegram --accept-policy
+# --workspace .` in your own terminal. Any later change to the list asks you to accept it again.
 allow = [
   'git (status|diff|log)( .*)?',
   'npm (test|run lint)',

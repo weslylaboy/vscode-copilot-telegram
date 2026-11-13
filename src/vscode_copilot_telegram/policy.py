@@ -28,6 +28,9 @@ DEFAULT_BLOCK: list[str] = [
     r"\bformat\s+[a-zA-Z]:",
     r"\b(?:rd|rmdir)\s+/s\b.*\b[a-zA-Z]:\\?(?=$|\s)",
     r"\bRemove-Item\b.*-Recurse\b.*\s[a-zA-Z]:\\?\*?(?=$|\s)",
+    # the accept command: it only works when you type it yourself, so Copilot must not run it either
+    r"\bvscode[-_]copilot[-_]telegram\b.*--accept-policy\b",
+    r"accepted-policy\.json|\bsave_accepted_policy\b",
     # power state
     r"^\s*(?:sudo\s+)?(?:shutdown|reboot|halt|poweroff)\b",
 ]

@@ -24,7 +24,7 @@ All code is in `src/vscode_copilot_telegram/`.
 | `workspace.py` | `resolve_cwd`: resolves `cwd` (after symlinks) and rejects anything outside the workspace root. | — |
 | `masking.py` | `mask_secrets`: regexes for PEM keys, GitHub/AWS/Slack/OpenAI/Google/Telegram tokens, bearer/basic auth, credentials in URLs, and `.env`-style `SECRET=…` assignments. | — |
 | `audit.py` | `AuditLog`: append-only JSONL with a lock; masks every string field. | `masking` |
-| `config.py` | `Settings` dataclass and defaults, `vscode-copilot-telegram.toml` loading and validation, `.env` loading order, credentials, workspace resolution. Refuses a bot token in the TOML file. | `python-dotenv`, `tomllib` |
+| `config.py` | `Settings` dataclass and defaults, `vscode-copilot-telegram.toml` loading and validation, `.env` loading order (never the project's own `.env`), credentials, workspace resolution. Refuses a bot token in the TOML file. Ignores an allow list (or `use_default_block = false`) that you haven't accepted, and implements `--accept-policy` (the accepted copy lives in `~/.config/vscode-copilot-telegram/accepted-policy.json`). | `python-dotenv`, `tomllib` |
 | `sessions.py` | Finds VS Code `workspaceStorage/<hash>` folders for a project and parses the three chat formats into `Turn(key, role, text, complete)`. Unknown kinds and missing fields are skipped, never fatal. | — |
 | `watcher.py` | Watch loop (`vscode-copilot-telegram-watch` script): polls session files by mtime/size, dedupes by turn key, waits for streaming replies to settle, formats and sends, persists state. | `sessions`, `telegram`, `masking`, `config` |
 
@@ -74,7 +74,7 @@ A command runs only after a positive decision. Every other path returns a `denie
 - Bad config or missing token → the server still starts so VS Code shows its tools, but `run_command` returns `denied-error` with the config error (and `ask_user` / `notify` return `error: …`)
 - `cwd` outside the workspace → `rejected`; block-list match or empty command → `blocked`
 
-Allow-listed commands are the only exception, and only when they fully match a pattern you wrote and contain no chaining characters. Even then a notice goes to Telegram (if the notice can't be sent, the allow-listed command still runs; that's the one place Telegram isn't required).
+Allow-listed commands are the only exception, and only when they fully match a pattern in an allow list you accepted (`--accept-policy`) and contain no chaining characters. Even then a notice goes to Telegram (if the notice can't be sent, the allow-listed command still runs; that's the one place Telegram isn't required).
 
 ### A single poller
 
@@ -123,6 +123,7 @@ This is the one full list. Other docs link here.
 - **Only `run_command` is gated.** File edits, the built-in Run in Terminal, tasks, notebooks, and other MCP servers or extensions don't go through Telegram. The table of what is and isn't gated, and how to review file edits, is in [SECURITY.md](../SECURITY.md#what-is-and-isnt-gated).
 - **The gate requires the built-in terminal to be off.** VS Code offers no API for other extensions or processes to answer Copilot's own confirmations. If Run in Terminal is enabled, those commands bypass Telegram (they still hit VS Code's own prompt unless auto-approved). Some Copilot harness sessions don't let you untick it; the fallback is in [SETUP §7](SETUP.md#7-local-vs-copilot-harness-sessions).
 - **One bot per VS Code window** that runs the server (Telegram allows one poller per bot).
+- **Some files inside the project are trusted.** The MCP config (`.vscode/mcp.json`, `.mcp.json`) is read by VS Code, and the other keys of `vscode-copilot-telegram.toml` (for example `log_path`) are trusted as written; Copilot can edit those files without approval. An allow list in the TOML is ignored until you accept it with `--accept-policy`, and the project `.env` is never read. See [SECURITY.md](../SECURITY.md#project-files-that-can-change-the-gate).
 - **Model compliance.** Copilot has to choose `run_command`. With the built-in terminal off it has no other way to run commands, but it may give up instead.
 - **The watcher reads undocumented files** and is best-effort; format changes can break it without breaking approvals.
 - **Telegram message limits.** Long commands are cut to 2500 characters in the message (the full command still runs and is in the audit log); outputs are tail-truncated.

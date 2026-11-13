@@ -102,10 +102,11 @@ pip install -e .
 Both programs read credentials from environment variables, and load `.env` files without overriding variables that are already set. They look in this order (the first file that sets a variable wins):
 
 1. The file named by `VSCODE_COPILOT_TELEGRAM_ENV_FILE`, if set
-2. `PROJECT/.env` (the workspace root)
-3. `~/.config/vscode-copilot-telegram/.env` (Windows: `C:\Users\YOU\.config\vscode-copilot-telegram\.env`)
+2. `~/.config/vscode-copilot-telegram/.env` (Windows: `C:\Users\YOU\.config\vscode-copilot-telegram\.env`)
 
-**Use option 3.** It lives outside every repository, works for all your projects, and both programs find it. Don't put the token in `PROJECT/.env` unless that file is git-ignored.
+**Use the second one.** It lives outside every repository, works for all your projects, and both programs find it.
+
+A `.env` inside your project is **never read**, on purpose: Copilot can edit files in the project without approval, so that file must not be able to change who approves commands. If the project `.env` has these settings, both programs write a warning in their log and ignore them.
 
 **Windows (PowerShell):**
 
@@ -362,7 +363,7 @@ tail -f ~/Library/Logs/vscode-copilot-telegram-watch.log
 launchctl bootout gui/$(id -u)/com.vscode-copilot-telegram.watch.your-project      # stop and unload
 ```
 
-If your project is under `~/Documents`, `~/Desktop`, or `~/Downloads`, macOS privacy protection may block a background agent from reading `PROJECT/.env`. Keep the credentials in `~/.config/vscode-copilot-telegram/.env` (step 5), which isn't protected.
+If the file named by `VSCODE_COPILOT_TELEGRAM_ENV_FILE` is under `~/Documents`, `~/Desktop`, or `~/Downloads`, macOS privacy protection may block a background agent from reading it. Keep the credentials in `~/.config/vscode-copilot-telegram/` (step 5), which isn't protected.
 
 ### Keep it running on Linux (systemd)
 

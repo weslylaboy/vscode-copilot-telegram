@@ -34,6 +34,7 @@ Python 3.11+ (CI: 3.11 and 3.12). No test should call the real Telegram API.
 - Only `TELEGRAM_USER_ID` can answer. Callback buttons are single-use (persisted across restarts).
 - `mask_secrets` on everything sent to Telegram or written to the audit log. Never commit `.env` or put a token in TOML.
 - Only the MCP server long-polls Telegram (`getUpdates`). The watcher is send-only. Do not add a second poller.
+- Never load the project's own `.env`. An allow list (or `use_default_block = false`) in the project TOML only counts after the user accepts it with `--accept-policy` (saved outside the project).
 - Do not weaken default block/allow policy without documentation and tests.
 
 When a change affects behavior, security, CLI, or module boundaries, update the docs listed in `AGENTS.md` (README, `docs/*`, `SECURITY.md`, `CHANGELOG.md` as appropriate).

@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Security
+
+- The project's own `.env` (`<workspace>/.env`) is no longer loaded by the server or the watcher. Before, a `.env` written by Copilot (file edits aren't gated) or brought by a cloned repository could replace the Telegram credentials or set `VSCODE_COPILOT_TELEGRAM_API_BASE`, and so decide who approves commands. If that file has `TELEGRAM_*`, `VSCODE_COPILOT_TELEGRAM_*`, or `LOG_PATH`, both programs now log a warning and ignore them.
+- An `allow` list (or `use_default_block = false`) in `vscode-copilot-telegram.toml` is ignored until you accept it with the new `vscode-copilot-telegram --accept-policy` command, which you type in a terminal. Before, Copilot could add `allow = ['.*']` to the file (file edits aren't gated), and after a restart its commands ran with no tap. The accepted copy is saved in `~/.config/vscode-copilot-telegram/accepted-policy.json`; if the list in the file differs from it, the allow list is empty, the built-in block list is on, and every command asks. The default block list now also denies a `run_command` that contains `--accept-policy` or names the accepted file.
+
+### Added
+
+- `vscode-copilot-telegram --accept-policy` (see above), a warning in the server output and in each approval message while an allow list is not accepted, and `tests/test_config.py`.
+
+### Changed
+
+- **Breaking:** if your credentials were in the project `.env`, move them to `~/.config/vscode-copilot-telegram/.env`, or to a file outside the project named by `VSCODE_COPILOT_TELEGRAM_ENV_FILE` (use this for one bot per project). Variables from the project `.env` are also no longer passed to approved commands.
+- **Breaking:** an existing `allow` list in `vscode-copilot-telegram.toml` stops working until you run `vscode-copilot-telegram --accept-policy --workspace <project>` once.
+
 
 
 ## [0.1.0] - 2026-11-12

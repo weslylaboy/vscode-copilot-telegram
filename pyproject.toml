@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vscode-copilot-telegram"
+version = "0.1.0"
+description = "Mirror VS Code Copilot chat to Telegram and approve Copilot's shell commands from Telegram."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Wesly Laboy" }]
+keywords = ["copilot", "vscode", "telegram", "mcp", "approval"]
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Operating System :: OS Independent",
+]
+dependencies = [
+  "mcp>=1.2",          # works with 1.x (FastMCP) and 2.x (MCPServer)
+  "httpx>=0.27",
+  "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+
+[project.scripts]
+vscode-copilot-telegram = "vscode_copilot_telegram.server:main"
+vscode-copilot-telegram-watch = "vscode_copilot_telegram.watcher:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

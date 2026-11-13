@@ -1,0 +1,20 @@
+.DS_Store
+
+# secrets
+.env
+.env.*
+
+# virtual environments
+.venv/
+venv/
+
+# Python build / cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# vscode-copilot-telegram runtime state (audit log, broker state)
+.vscode-copilot-telegram/

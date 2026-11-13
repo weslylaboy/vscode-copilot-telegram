@@ -1,0 +1,24 @@
+# Optional. Copy to the root of your project as vscode-copilot-telegram.toml.
+# Never put the bot token here; use TELEGRAM_BOT_TOKEN.
+
+timeout_s = 600            # seconds to wait for Approve/Deny or an answer; no answer = denied
+run_timeout_s = 900        # an approved command is killed after this long
+max_output_chars = 8000    # output returned to Copilot
+telegram_output_chars = 1500
+shell = "default"          # default | sh | bash | powershell | pwsh | cmd
+log_path = ".vscode-copilot-telegram/audit.jsonl"
+
+# Regexes that must match the WHOLE command. Commands containing ; && || | ` $( > < or a
+# newline are never auto-approved. Auto-approved commands still post a notice to Telegram.
+allow = [
+  'git (status|diff|log)( .*)?',
+  'npm (test|run lint)',
+  'pytest( -q)?( [\w/.-]+)*',
+]
+
+# Regexes searched anywhere in the command. Added to the built-in block list.
+block = [
+  'terraform (apply|destroy)',
+  'kubectl delete',
+]
+# use_default_block = true

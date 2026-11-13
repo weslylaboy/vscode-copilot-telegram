@@ -1,0 +1,13 @@
+// Alternative .vscode/mcp.json: no prompts. Reads an untracked env file outside the repo.
+// (vscode-copilot-telegram also reads ~/.config/vscode-copilot-telegram/.env on its own; envFile just makes it explicit.)
+{
+  "servers": {
+    "vscode-copilot-telegram": {
+      "type": "stdio",
+      "command": "C:\\Users\\YOU\\tools\\vscode-copilot-telegram\\.venv\\Scripts\\vscode-copilot-telegram.exe",
+      "args": ["--workspace", "${workspaceFolder}"],
+      "cwd": "${workspaceFolder}",
+      "envFile": "${userHome}/.config/vscode-copilot-telegram/.env"
+    }
+  }
+}

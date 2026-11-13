@@ -1,0 +1,39 @@
+{
+  "version": 3,
+  "sessionId": "11111111-aaaa-bbbb-cccc-000000000001",
+  "creationDate": 1767225600000,
+  "customTitle": "Add login page",
+  "requesterUsername": "dev",
+  "responderUsername": "GitHub Copilot",
+  "requests": [
+    {
+      "requestId": "request_1",
+      "message": { "text": "Add a login page", "parts": [{ "kind": "text", "text": "Add a login page" }] },
+      "response": [
+        { "value": "Sure. I'll create ", "supportThemeIcons": false },
+        { "kind": "inlineReference", "inlineReference": { "$mid": 1, "path": "/home/dev/proj/src/login.tsx", "scheme": "file" } },
+        { "value": " and wire it up." },
+        { "kind": "thinking", "value": "private reasoning that must not be sent" },
+        { "kind": "toolInvocationSerialized", "invocationMessage": { "value": "Running `npm test`" },
+          "pastTenseMessage": { "value": "Ran `npm test`" },
+          "toolSpecificData": { "kind": "terminal", "commandLine": { "original": "npm test" } } },
+        { "kind": "codeblockUri", "uri": { "path": "/home/dev/proj/src/login.tsx" } },
+        { "kind": "textEditGroup", "uri": { "$mid": 1, "path": "/home/dev/proj/src/login.tsx", "scheme": "file" }, "edits": [] },
+        { "kind": "textEditGroup", "uri": { "$mid": 1, "path": "/home/dev/proj/src/login.tsx", "scheme": "file" }, "edits": [] },
+        { "kind": "markdownContent", "content": { "value": "\nDone. Token used: ghp_abcdefghijklmnopqrstuvwxyz0123456789" } }
+      ],
+      "result": { "timings": { "totalElapsed": 4000 } }
+    },
+    {
+      "requestId": "request_2",
+      "message": "Now add tests",
+      "response": "Old builds stored plain strings.",
+      "result": {}
+    },
+    {
+      "requestId": "request_3",
+      "message": { "text": "And docs?" },
+      "response": [ { "value": "Working on it" } ]
+    }
+  ]
+}

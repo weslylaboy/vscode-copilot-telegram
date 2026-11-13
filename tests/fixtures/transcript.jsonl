@@ -1,0 +1,8 @@
+{"type":"session.start","id":"e0","data":{"sessionId":"t1","cwd":"/home/dev/proj"}}
+{"type":"user.message","id":"e1","data":{"content":"Run the linter"}}
+{"type":"assistant.turn_start","id":"e2","data":{}}
+{"type":"assistant.message","id":"e3","data":{"messageId":"m1","content":"Running ruff now."}}
+{"type":"tool.execution_start","id":"e4","data":{"toolName":"run_in_terminal","arguments":"{\"command\":\"ruff check .\"}"}}
+{"type":"tool.execution_complete","id":"e5","data":{"success":true}}
+{"type":"assistant.message","id":"e6","data":{"messageId":"m2","content":"All clean."}}
+{"type":"assistant.turn_end","id":"e7","data":{}}

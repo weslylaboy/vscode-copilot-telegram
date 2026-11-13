@@ -1,0 +1,12 @@
+{"kind":0,"v":{"version":3,"sessionId":"22222222-aaaa-bbbb-cccc-000000000002","creationDate":1767225600000,"requests":[]}}
+{"kind":2,"k":["requests"],"v":[{"requestId":"r1","message":{"text":"Fix the build"},"response":[]}]}
+{"kind":2,"k":["requests",0,"response"],"v":[{"value":"Looking at the "}]}
+{"kind":2,"k":["requests",0,"response"],"v":[{"value":"error now."}]}
+{"kind":1,"k":["requests",0,"result"],"v":{"timings":{"totalElapsed":1200}}}
+{"kind":1,"k":["customTitle"],"v":"Build fix"}
+{"kind":2,"k":["requests"],"v":[{"requestId":"r2","message":{"text":"Thanks"},"response":[{"value":"draft"}]}]}
+{"kind":2,"k":["requests",1,"response"],"i":0,"v":[{"value":"You're welcome!"}]}
+{"kind":2,"k":["requests"],"v":[{"requestId":"r3","message":{"text":"delete me"},"response":[]}]}
+{"kind":3,"k":["requests",2]}
+{"kind":1,"k":["requests",1,"modelState"],"v":{"value":1,"completedAt":1767225700000}}
+{"kind":2,"k":["requests"],"v":[{"requestId":"r4","message":{"text":"half writ

@@ -131,7 +131,7 @@ ENV
 chmod 600 ~/.config/vscode-copilot-telegram/.env
 ```
 
-A template is in [`examples/env.example`](../examples/env.example). Other ways to supply the credentials (VS Code input prompts, `envFile`) are in [CONFIGURATION.md](CONFIGURATION.md#ways-to-supply-the-token).
+A template is in [`.env.example`](../.env.example) (it documents every variable, the optional ones commented out) and a short one in [`examples/env.example`](../examples/env.example). Other ways to supply the credentials (VS Code input prompts, `envFile`) are in [CONFIGURATION.md](CONFIGURATION.md#ways-to-supply-the-token).
 
 ## 6. Test Telegram
 

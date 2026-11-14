@@ -49,7 +49,7 @@ No test talks to the real Telegram API or needs a token. `VSCODE_COPILOT_TELEGRA
 
 ## CI
 
-`.github/workflows/ci.yml` (GitHub Actions) runs `pip install -e ".[dev]"` and `pytest -q` on Linux, macOS, and Windows with Python 3.11 and 3.12, and `mypy` once (on Linux), for every branch push and pull request. Results are in the **Actions** tab of the repository. The Windows jobs have not run yet, and some tests may need fixes the first time (for example, quoting through `cmd.exe`).
+`.github/workflows/ci.yml` (GitHub Actions) runs `pip install -e ".[dev]"` and `pytest -q` on Linux, macOS, and Windows with Python 3.11 and 3.12, and `mypy` once (on Linux), for every branch push and pull request. Results are in the **Actions** tab of the repository. Passing CI on Windows and macOS is not a live test: the real shells, terminals, and auto-start tools are still listed below.
 
 ## Manual testing against real Telegram
 

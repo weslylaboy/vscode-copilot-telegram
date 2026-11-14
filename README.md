@@ -122,7 +122,6 @@ The automated tests use a fake Telegram and sample files. These still need a rea
 - [ ] **macOS:** the launchd agent and the privacy prompts.
 - [ ] **Linux:** the systemd user service.
 - [ ] **`--accept-policy`** typed in a real terminal on Windows and Linux, and in the VS Code terminal (macOS was run by hand once).
-- [ ] **CI:** first run of the GitHub Actions workflow on Windows and macOS (it now runs on all three systems).
 - [ ] **VS Code settings and MCP:** the `chat.tools.edits.autoApprove` setting for the files that control the gate, and registering the server in the user-level MCP configuration (outside the project) so a project can't change its `command`. Details in [DEVELOPMENT.md](docs/DEVELOPMENT.md#what-is-not-tested-yet).
 - [ ] **The full [verification checklist](docs/SETUP.md#12-end-to-end-verification-checklist)** on each OS.
 

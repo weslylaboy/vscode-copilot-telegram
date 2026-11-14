@@ -17,7 +17,7 @@ vscode-copilot-telegram puts a human approval step between GitHub Copilot and yo
 | Secrets leak to Telegram | `mask_secrets` on everything sent and logged; bot token stripped from child environments and redacted from error messages | Masking is best-effort. Unusual secret formats, or secrets split across lines, can slip through. Telegram stores chat history on its servers. |
 | Bot token theft | Token only in env vars / an untracked `.env` outside the repo; the server refuses a token in `vscode-copilot-telegram.toml` | Anyone who reads your `.env` or process environment can impersonate the bot (send you messages). They still can't approve commands, which requires *your* user id. |
 | A misconfigured or crashed server runs commands | Fail closed: config errors, Telegram errors, and timeouts all mean "not run" | — |
-| A file inside the project changes the gate: what is auto-approved, who receives the approvals, or the address the server talks to. Copilot can write such a file (file edits aren't gated), and a cloned repository can bring one | The project `.env` is never read, so it can't change the credentials, the Bot API address, or the audit log path. An allow list (or `use_default_block = false`) in the project TOML is ignored until you accept it yourself, outside the project (see [Accepting the allow list](#accepting-the-allow-list)) | The MCP config in the project is read by VS Code, not by this tool, so it is still trusted. The other TOML keys (for example `log_path`) are trusted as written. You can still accept a bad allow list, or Copilot's edit tools may be able to edit the accepted copy in your home folder. |
+| A file inside the project changes the gate: what is auto-approved, who receives the approvals, or the address the server talks to. Copilot can write such a file (file edits aren't gated), and a cloned repository can bring one | The project `.env` is never read, so it can't change the credentials, the Bot API address, or the audit log path. An allow list (or `use_default_block = false`) in the project TOML is ignored until you accept it yourself, outside the project (see [Accepting the allow list](#accepting-the-allow-list)). The audit log is outside the project | The MCP config in the project is read by VS Code, not by this tool, so it is still trusted. You can still accept a bad allow list. The accepted copy is out of reach of VS Code's built-in edit tools, but not of a terminal command you allow. |
 
 **Out of scope:** a compromised local machine or VS Code extension, a compromised Telegram account, and malicious code you approve.
 
@@ -39,7 +39,7 @@ Files inside the project can decide how the gate works. Copilot can create or ed
 | File | What it can change | Protected by the code? |
 | --- | --- | --- |
 | `.env` in the project root | Nothing. Before, it could replace the Telegram credentials (so another person received and approved the requests) and the Bot API address (so another server received the bot token and answered the approvals). | **Yes.** The file is never read. If it has `TELEGRAM_*`, `VSCODE_COPILOT_TELEGRAM_*`, or `LOG_PATH`, the server and the watcher log a warning and ignore them. |
-| `vscode-copilot-telegram.toml` | `allow` decides what runs with no tap. A pattern that matches everything auto-approves every command that has no chaining characters. `use_default_block = false` turns off the built-in block list. `log_path` moves the audit log. | **Partly.** `allow` and `use_default_block = false` are ignored until you accept them yourself with `--accept-policy` (see below). The other keys, including `log_path`, are trusted as written. |
+| `vscode-copilot-telegram.toml` | `allow` decides what runs with no tap. A pattern that matches everything auto-approves every command that has no chaining characters. `use_default_block = false` turns off the built-in block list. | **Partly.** `allow` and `use_default_block = false` are ignored until you accept them yourself with `--accept-policy` (see below). The other keys (timeouts, `shell`, `block`, `project_name`) can't make a command run without your tap, so they are trusted as written. `log_path` is ignored (with a warning). |
 | `.vscode/mcp.json` and `.mcp.json` | Which program VS Code starts as the server, with which `--workspace` and which environment. | **No.** VS Code reads these, not this tool. |
 
 A change to the MCP config takes effect the next time VS Code starts the server.
@@ -50,15 +50,32 @@ An `allow` list, or `use_default_block = false`, in `vscode-copilot-telegram.tom
 
 - If Copilot (or a cloned repository) adds, removes, or changes anything in the allow list or `use_default_block`, it no longer matches what you accepted. The allow list is then empty, the built-in block list stays on, and every command asks in Telegram. The server output and each approval message say so.
 - The accept command refuses to run without a terminal, so it can't be run through `run_command` (no input) or a script. The built-in block list also denies any `run_command` that contains it, or names the accepted file.
-- It does **not** stop you from accepting a bad list, so read the patterns. See the allow-list row in the threat table above for what a broad pattern allows.
-- It does not stop Copilot from using a file edit tool to change `accepted-policy.json` itself. That file is outside the project, and file edits aren't gated by this tool; whether VS Code lets Copilot edit files outside the workspace is VS Code's rule. Don't give Copilot's edit tools access to your home folder if you want to rule this out.
+- It checks the list when you accept it. It **refuses** a pattern that approves (almost) every command, such as `.*` or `\S+`. For every other pattern it **warns** under the pattern if it also approves risky commands, for example `git diff --output=/tmp/out.txt` (writes a file anywhere), `npm install some-package`, `python script.py`, or `pytest ../other-project`. A test runner or build tool in the list runs any code in the project, including code Copilot just wrote. The check can't judge your list, so read the patterns.
+- It does **not** stop you from accepting a bad list. See the allow-list row in the threat table above for what a broad pattern allows.
+- VS Code says its built-in agent tools can only read and write files inside the current workspace folder ([VS Code security page](https://code.visualstudio.com/docs/agents/run/security)). The accepted copy is in your home folder, so those tools can't change it. It can still be changed by a terminal command (the built-in Run in Terminal tool, if it is on), by another MCP server or extension, or by a `run_command` you approve (the built-in block list denies one that names the file). If the built-in terminal is on, an agent can also type `accept` itself, but then the gate is already open.
+- If you open your home folder as the workspace, the accepted copy would be inside the workspace. The server then ignores it (fail closed) and `--accept-policy` refuses to save: open a project folder instead.
+- Agent sandboxing in VS Code (see its security page) limits what terminal commands can touch.
 
 What you can do:
 
 - Before you start the server in a repository you cloned, look for the TOML and the MCP config and read them.
 - Keep both in git, and check `git status` and `git diff` before you restart the server or reload the VS Code window.
+- Ask VS Code to confirm edits to the files that control the gate. In your **User** settings (Preferences: Open User Settings (JSON)):
+
+  ```jsonc
+  "chat.tools.edits.autoApprove": {
+    "**/.vscode/mcp.json": false,
+    "**/.mcp.json": false,
+    "**/vscode-copilot-telegram.toml": false,
+    "**/.env": false
+  }
+  ```
+
+  This is the setting VS Code recommends for sensitive files ([VS Code security page](https://code.visualstudio.com/docs/agents/run/security), step 4). An edit then waits for your click, so you see it before the server restarts. Servers in `.vscode/mcp.json` and `.mcp.json` inherit Workspace Trust, so VS Code doesn't ask again when their `command` changes; this setting is how you get a chance to look.
 - Keep the file named by `VSCODE_COPILOT_TELEGRAM_ENV_FILE` outside the project. If it points to a file inside the project, that file has the same problem the project `.env` had.
 - If a warning says the allow list is not accepted and you didn't change it, find out who did (`git diff`) before you accept it again.
+
+Not tested yet: registering the server in your **user-level** MCP configuration (outside the project) instead of the project files, so a project can't change its `command`. It is on the [to-do list](README.md#to-do).
 
 ## Token storage
 
@@ -72,7 +89,7 @@ What you can do:
 
 To your private chat with your own bot: project name, commands, Copilot's reasons, working folders, a tail of command output, questions and answers, status notes, and, if you run the watcher, your prompts and Copilot's replies with one-line tool and file-edit summaries. All of it is masked first. It's stored by Telegram like any other chat (bot chats aren't end-to-end encrypted). If that isn't acceptable for a codebase, run without the watcher, use `--no-tools`, or don't use vscode-copilot-telegram on that project.
 
-The audit log (`<workspace>/.vscode-copilot-telegram/audit.jsonl`) stays on your machine and is masked the same way. Output returned to **Copilot** is not masked, since Copilot already works with the workspace contents.
+The audit log stays on your machine, outside the project (`~/.vscode-copilot-telegram/audit-<project>-<hash>.jsonl`; the start-up line in the server output shows the exact path), and is masked the same way. It is outside the project on purpose: it records what Copilot asked to run, and VS Code's built-in edit tools can't reach it there. Output returned to **Copilot** is not masked, since Copilot already works with the workspace contents.
 
 ## Environment of approved commands
 

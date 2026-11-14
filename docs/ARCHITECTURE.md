@@ -24,7 +24,7 @@ All code is in `src/vscode_copilot_telegram/`.
 | `workspace.py` | `resolve_cwd`: resolves `cwd` (after symlinks) and rejects anything outside the workspace root. | — |
 | `masking.py` | `mask_secrets`: regexes for PEM keys, GitHub/AWS/Slack/OpenAI/Google/Telegram tokens, bearer/basic auth, credentials in URLs, and `.env`-style `SECRET=…` assignments. | — |
 | `audit.py` | `AuditLog`: append-only JSONL with a lock; masks every string field. | `masking` |
-| `config.py` | `Settings` dataclass and defaults, `vscode-copilot-telegram.toml` loading and validation, `.env` loading order (never the project's own `.env`), credentials, workspace resolution. Refuses a bot token in the TOML file. Ignores an allow list (or `use_default_block = false`) that you haven't accepted, and implements `--accept-policy` (the accepted copy lives in `~/.config/vscode-copilot-telegram/accepted-policy.json`). | `python-dotenv`, `tomllib` |
+| `config.py` | `Settings` dataclass and defaults, `vscode-copilot-telegram.toml` loading and validation, `.env` loading order (never the project's own `.env`), credentials, workspace resolution. Refuses a bot token in the TOML file. Ignores an allow list (or `use_default_block = false`) that you haven't accepted, and implements `--accept-policy` (the accepted copy lives in `~/.config/vscode-copilot-telegram/accepted-policy.json`; it refuses patterns that approve everything and warns about risky ones). The default audit log path is outside the project (`~/.vscode-copilot-telegram/`). | `python-dotenv`, `tomllib` |
 | `sessions.py` | Finds VS Code `workspaceStorage/<hash>` folders for a project and parses the three chat formats into `Turn(key, role, text, complete)`. Unknown kinds and missing fields are skipped, never fatal. | — |
 | `watcher.py` | Watch loop (`vscode-copilot-telegram-watch` script): polls session files by mtime/size, dedupes by turn key, waits for streaming replies to settle, formats and sends, persists state. | `sessions`, `telegram`, `masking`, `config` |
 
@@ -57,7 +57,7 @@ sequenceDiagram
     else denied / timeout / Telegram error
         S-->>C: {decision: denied*, exit_code: null} (nothing ran)
     end
-    S->>S: append audit.jsonl
+    S->>S: append to the audit log (outside the project)
 ```
 
 `ask_user` is the same minus the policy and runner: option buttons use callbacks `ct|<id>|o<N>`, and typed text is routed to the open question (by swipe-reply if several are open). `notify` is a single `sendMessage`.
@@ -123,7 +123,7 @@ This is the one full list. Other docs link here.
 - **Only `run_command` is gated.** File edits, the built-in Run in Terminal, tasks, notebooks, and other MCP servers or extensions don't go through Telegram. The table of what is and isn't gated, and how to review file edits, is in [SECURITY.md](../SECURITY.md#what-is-and-isnt-gated).
 - **The gate requires the built-in terminal to be off.** VS Code offers no API for other extensions or processes to answer Copilot's own confirmations. If Run in Terminal is enabled, those commands bypass Telegram (they still hit VS Code's own prompt unless auto-approved). Some Copilot harness sessions don't let you untick it; the fallback is in [SETUP §7](SETUP.md#7-local-vs-copilot-harness-sessions).
 - **One bot per VS Code window** that runs the server (Telegram allows one poller per bot).
-- **Some files inside the project are trusted.** The MCP config (`.vscode/mcp.json`, `.mcp.json`) is read by VS Code, and the other keys of `vscode-copilot-telegram.toml` (for example `log_path`) are trusted as written; Copilot can edit those files without approval. An allow list in the TOML is ignored until you accept it with `--accept-policy`, and the project `.env` is never read. See [SECURITY.md](../SECURITY.md#project-files-that-can-change-the-gate).
+- **Some files inside the project are trusted.** The MCP config (`.vscode/mcp.json`, `.mcp.json`) is read by VS Code, not by this tool, and VS Code gives it the same trust as the workspace; Copilot can edit it without approval (the edit-approval setting in [SECURITY.md](../SECURITY.md#accepting-the-allow-list) gives you a click). The other keys of `vscode-copilot-telegram.toml` are trusted too, but they can't make a command run without your tap. An allow list in the TOML is ignored until you accept it with `--accept-policy`, the project `.env` is never read, and the audit log is outside the project. See [SECURITY.md](../SECURITY.md#project-files-that-can-change-the-gate).
 - **Model compliance.** Copilot has to choose `run_command`. With the built-in terminal off it has no other way to run commands, but it may give up instead.
 - **The watcher reads undocumented files** and is best-effort; format changes can break it without breaking approvals.
 - **Telegram message limits.** Long commands are cut to 2500 characters in the message (the full command still runs and is in the audit log); outputs are tail-truncated.

@@ -24,7 +24,7 @@ flowchart LR
         SH["Shell in the<br/>workspace folder"]
         CS[("workspaceStorage/&lt;hash&gt;/<br/>chatSessions/*.json(l)")]
         W["vscode-copilot-telegram-watch"]
-        AL[(".vscode-copilot-telegram/<br/>audit.jsonl")]
+        AL[("Audit log<br/>(outside the project)")]
     end
     TG["Telegram Bot API<br/>api.telegram.org"]
     PH["Your phone<br/>(Telegram app)"]
@@ -54,7 +54,7 @@ Everything is outbound HTTPS to Telegram, so you don't need open ports, a public
 - **Fail closed.** If you deny, don't answer before the timeout (10 minutes by default), Telegram can't be reached, or the server is misconfigured, the command doesn't run. The one exception: a command that matches your allow list still runs when Telegram can't be reached (the allow list is empty by default).
 - **Block list and allow list.** Dangerous commands, like `rm -rf /` or a forced `git push`, are denied without asking. Commands you trust, like `git status`, can be auto-approved, and you still get a notice. You switch that on yourself with `--accept-policy` in your terminal, so an edit to the project file by Copilot can't turn it on. A command that chains other commands (`;`, `&&`, `|`, and similar) is never auto-approved.
 - **Only you can answer.** Messages and taps from any other Telegram user are ignored. Each button works once, even after a restart.
-- **Secrets masked, everything logged.** Tokens, keys, and passwords are masked before anything is sent to Telegram or written to the audit log (`.vscode-copilot-telegram/audit.jsonl`), which records every request and decision.
+- **Secrets masked, everything logged.** Tokens, keys, and passwords are masked before anything is sent to Telegram or written to the audit log (outside the project, in `~/.vscode-copilot-telegram/`), which records every request and decision.
 - **Questions and chat mirror.** Copilot can ask you a question with `ask_user` (answer buttons or a typed reply). The watcher sends your prompts and Copilot's replies to the same chat.
 
 The details are in [CONFIGURATION.md](docs/CONFIGURATION.md) (block and allow lists, tools, and every option) and [SECURITY.md](SECURITY.md) (what is and isn't protected).
@@ -121,7 +121,9 @@ The automated tests use a fake Telegram and sample files. These still need a rea
 - [ ] **Windows:** `cmd.exe` and PowerShell quoting in `run_command`, killing the whole process tree, and Task Scheduler with `pythonw.exe`.
 - [ ] **macOS:** the launchd agent and the privacy prompts.
 - [ ] **Linux:** the systemd user service.
-- [ ] **`--accept-policy`** in a real terminal on Windows, macOS, and Linux, including the terminal inside VS Code.
+- [ ] **`--accept-policy`** typed in a real terminal on Windows and Linux, and in the VS Code terminal (macOS was run by hand once).
+- [ ] **CI:** first run of the GitHub Actions workflow on Windows and macOS (it now runs on all three systems).
+- [ ] **VS Code settings and MCP:** the `chat.tools.edits.autoApprove` setting for the files that control the gate, and registering the server in the user-level MCP configuration (outside the project) so a project can't change its `command`. Details in [DEVELOPMENT.md](docs/DEVELOPMENT.md#what-is-not-tested-yet).
 - [ ] **The full [verification checklist](docs/SETUP.md#12-end-to-end-verification-checklist)** on each OS.
 
 ### Left to do
@@ -137,7 +139,6 @@ The automated tests use a fake Telegram and sample files. These still need a rea
 
 Security notes that are missing from the docs:
 
-- [ ] Make the allow list examples narrower, and warn that auto-approving a test runner like `pytest` runs any code Copilot just wrote.
 - [ ] In the troubleshooting guide, use `curl` for `deleteWebhook` so the token doesn't stay in the browser history.
 
 

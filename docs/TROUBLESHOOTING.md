@@ -4,9 +4,9 @@ Start with the logs:
 
 - **MCP server:** Command Palette → **MCP: List Servers** → **vscode-copilot-telegram** → **Show Output**. Every line starts with `vscode-copilot-telegram`. Restart the server with `--log-level DEBUG` in `args` for more detail.
 - **Watcher:** the terminal you started it in, `~/Library/Logs/vscode-copilot-telegram-watch.log` with the launchd setup, or `journalctl --user -u vscode-copilot-telegram-watch-your-project.service` with the systemd setup. Add `-v` for debug output.
-- **Audit log:** `<workspace>/.vscode-copilot-telegram/audit.jsonl` records every request and decision.
+- **Audit log:** `~/.vscode-copilot-telegram/audit-<project>-<hash>.jsonl` records every request and decision (the exact path is in the server output at start-up).
 
-Contents: [The allow list does nothing](#the-allow-list-does-nothing) · [No messages at all](#no-telegram-messages-at-all) · [Buttons don't respond](#buttons-dont-respond-or-say-expired) · [Several VS Code windows (409 Conflict)](#several-vs-code-windows-409-conflict) · [Watcher finds no sessions](#the-watcher-finds-no-sessions) · [Watcher sends nothing](#the-watcher-runs-but-sends-nothing) · [Copilot still uses the built-in terminal](#copilot-still-uses-the-built-in-terminal) · [Server doesn't appear](#the-server-doesnt-show-up-in-copilot) · [Wrong Copilot account](#copilot-uses-the-wrong-github-account) · [Blocked tunnels](#remote-tunnels-are-blocked-by-your-company) · [Commands fail on Windows](#commands-fail-on-windows-with-syntax-errors)
+Contents: [The allow list does nothing](#the-allow-list-does-nothing) · [log_path is ignored](#the-server-says-log_path-is-ignored) · [No messages at all](#no-telegram-messages-at-all) · [Buttons don't respond](#buttons-dont-respond-or-say-expired) · [Several VS Code windows (409 Conflict)](#several-vs-code-windows-409-conflict) · [Watcher finds no sessions](#the-watcher-finds-no-sessions) · [Watcher sends nothing](#the-watcher-runs-but-sends-nothing) · [Copilot still uses the built-in terminal](#copilot-still-uses-the-built-in-terminal) · [Server doesn't appear](#the-server-doesnt-show-up-in-copilot) · [Wrong Copilot account](#copilot-uses-the-wrong-github-account) · [Blocked tunnels](#remote-tunnels-are-blocked-by-your-company) · [Commands fail on Windows](#commands-fail-on-windows-with-syntax-errors)
 
 ---
 
@@ -21,6 +21,12 @@ vscode-copilot-telegram --accept-policy --workspace /path/to/your/project     # 
 ```
 
 Type `accept`, then restart the MCP server (MCP: List Servers → Restart). It refuses to run without a terminal ("must be run by you"). If the warning appears and you did not change the file, check `git diff` first: something edited the list.
+
+It also refuses a pattern that approves (almost) every command, such as `.*`; replace it with patterns for the exact commands you trust. If it says the accepted file "is inside" the workspace, you opened your home folder as the workspace: open a project folder instead.
+
+## The server says `log_path` is ignored
+
+Nothing is stopped. The server output (MCP: List Servers → Show Output) has a warning like `vscode-copilot-telegram.toml sets log_path, which is no longer read`. The audit log is outside the project now (`~/.vscode-copilot-telegram/audit-<project>-<hash>.jsonl`, the warning shows the exact path). If an older audit log is still in the project, the warning names it: move it or delete it. Remove the `log_path` line from `vscode-copilot-telegram.toml` to stop the warning. To put the log somewhere else, set `LOG_PATH` in the server's environment (VS Code's `env`, or `~/.config/vscode-copilot-telegram/.env`).
 
 ## No Telegram messages at all
 

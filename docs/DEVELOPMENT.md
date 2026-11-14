@@ -24,7 +24,7 @@ Python 3.11 is the minimum (`tomllib`, `Path.is_relative_to`, modern typing). CI
 ## Run the tests
 
 ```bash
-pytest -q                          # whole suite (130 tests, ~7 s)
+pytest -q                          # whole suite (144 tests, ~15 s)
 pytest -q tests/test_bridge.py     # one module
 pytest -q -k timeout               # by name
 mypy                               # type check of src/
@@ -39,7 +39,7 @@ pytest options live in `pyproject.toml` under `[tool.pytest.ini_options]` (`asyn
 | `tests/test_masking.py` | Each masking pattern |
 | `tests/test_runner.py` | Combined output capture, run timeout kills, the Windows kill calls `taskkill` by full path, token stripped from the child environment, head-and-tail truncation |
 | `tests/test_workspace.py` | cwd resolution, `..` / absolute / sibling-prefix / symlink escapes, missing folders |
-| `tests/test_config.py` | The project `.env` is never loaded (credentials, API address, audit log path), the names it would have set are reported, the `.env` load order outside the project, and the allow list: ignored until accepted, ignored again when the file changes, accepted per workspace, and `--accept-policy` refusing without a terminal or without typing `accept` |
+| `tests/test_config.py` | The project `.env` is never loaded (credentials, API address, audit log path), the names it would have set are reported, the `.env` load order outside the project, the audit log default (outside the project, a leftover `log_path` in the TOML is ignored with a warning that names an older log file, the server still starts, `LOG_PATH` still works), and the allow list: ignored until accepted, ignored again when the file changes, accepted per workspace, refused when a pattern approves everything, warnings for risky patterns, the example allow list staying narrow, an accepted copy inside the workspace not trusted, and `--accept-policy` refusing as a script, and working in a real terminal (pseudo-terminal, not on Windows) |
 | `tests/test_sessions.py` | The three chat formats (fixtures in `tests/fixtures/`), op-log replay, file URI decoding, workspaceStorage matching, message splitting and formatting, and the watcher: dedupe across restarts, settle time, no history flood, backfill, retry after send failure |
 | `tests/test_mcp_smoke.py` | Starts the real server with `python -m vscode_copilot_telegram` over stdio, lists tools, and checks that calls fail closed with Telegram pointed at a closed local port, and without credentials |
 
@@ -49,7 +49,7 @@ No test talks to the real Telegram API or needs a token. `VSCODE_COPILOT_TELEGRA
 
 ## CI
 
-`.github/workflows/ci.yml` (GitHub Actions) runs `pip install -e ".[dev]"`, `mypy`, and `pytest -q` on Python 3.11 and 3.12, for every branch push and pull request. Results are in the **Actions** tab of the repository.
+`.github/workflows/ci.yml` (GitHub Actions) runs `pip install -e ".[dev]"` and `pytest -q` on Linux, macOS, and Windows with Python 3.11 and 3.12, and `mypy` once (on Linux), for every branch push and pull request. Results are in the **Actions** tab of the repository. The Windows jobs have not run yet, and some tests may need fixes the first time (for example, quoting through `cmd.exe`).
 
 ## Manual testing against real Telegram
 
@@ -72,7 +72,9 @@ The automated tests use a fake Telegram and hand-made session fixtures. As of 0.
 - **Real chat session files** from current VS Code / Copilot Chat builds on Windows and macOS (the fixtures model the formats described below), including VS Code Server paths for tunnels.
 - **Windows specifics**: `cmd.exe` / PowerShell quoting through `run_command`, `taskkill /T` process-tree kill, Task Scheduler with `pythonw.exe`.
 - **macOS launchd** agent and privacy (TCC) prompts.
-- **`--accept-policy`** in a real terminal on each OS (the tests cover the logic with an injected prompt; I ran it once in a pseudo-terminal on macOS).
+- **`--accept-policy`** typed in a real terminal on Windows and Linux, and in the VS Code terminal. The tests run it as a script on every OS (it must refuse) and in a pseudo-terminal on macOS and Linux; I also ran it by hand on macOS. The Windows terminal and the VS Code terminal need a manual run ([SETUP §12](SETUP.md#12-end-to-end-verification-checklist)).
+- **The edit-approval setting** (`chat.tools.edits.autoApprove`) for the files that control the gate, and whether it also covers `.vscode/mcp.json` in every harness.
+- **Registering the server in the user-level MCP configuration** (outside the project) so a project can't change its `command`: whether `${workspaceFolder}` and `--workspace` work there, and for the Copilot harness.
 - **Linux systemd** user service for the watcher.
 
 Treat the first real run as the integration test, and please add regression tests or fixtures for anything that breaks.

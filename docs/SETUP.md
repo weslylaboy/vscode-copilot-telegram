@@ -225,13 +225,13 @@ Copy [`examples/dot-mcp.json`](../examples/dot-mcp.json) to `PROJECT/.mcp.json` 
 
 On Windows use `"command": "C:\\Users\\YOU\\tools\\vscode-copilot-telegram\\.venv\\Scripts\\vscode-copilot-telegram.exe"` and `"args": ["--workspace", "C:\\Users\\YOU\\code\\your-project"]`.
 
-The `--workspace` folder is the jail: `run_command` refuses any `cwd` outside it, and the audit log goes to `<workspace>/.vscode-copilot-telegram/audit.jsonl`. If you leave `--workspace` out, the server uses `$WORKSPACE_ROOT`, then its current directory.
+The `--workspace` folder is the jail: `run_command` refuses any `cwd` outside it, and the audit log goes to `~/.vscode-copilot-telegram/audit-<project>-<hash>.jsonl`, outside the project. If you leave `--workspace` out, the server uses `$WORKSPACE_ROOT`, then its current directory.
 
 Both files contain only paths, no secrets, so you can commit them if your team uses the same layout. Add `.vscode-copilot-telegram/` to the project's `.gitignore`.
 
 ### Start it
 
-Open the file in VS Code. Click the **Start** code lens above `"vscode-copilot-telegram"` (or run **MCP: List Servers** → vscode-copilot-telegram → **Start Server**). Then **MCP: List Servers** → vscode-copilot-telegram → **Show Output** should show a line like `workspace /…/your-project, audit log /…/your-project/.vscode-copilot-telegram/audit.jsonl`.
+Open the file in VS Code. Click the **Start** code lens above `"vscode-copilot-telegram"` (or run **MCP: List Servers** → vscode-copilot-telegram → **Start Server**). Then **MCP: List Servers** → vscode-copilot-telegram → **Show Output** should show a line like `workspace /…/your-project, audit log /Users/YOU/.vscode-copilot-telegram/audit-your-project-<hash>.jsonl`.
 
 If the output says `configuration error: …`, the server still starts, but every tool refuses to run commands (fail closed). Fix the error and restart the server.
 
@@ -251,6 +251,23 @@ Why step 5: otherwise every `run_command` asks twice, once in VS Code and once i
 If you can't untick Run in Terminal (Copilot harness), apply the fallback settings in [§7](#7-local-vs-copilot-harness-sessions).
 
 ✅ Check: in Configure Tools, Run in Terminal is unticked and vscode-copilot-telegram is ticked.
+
+### Ask for a click before Copilot edits the files that control the gate
+
+Copilot can edit files in the project without approval, including `.vscode/mcp.json` (which decides what program VS Code starts as the server) and `vscode-copilot-telegram.toml`. VS Code gives MCP servers in `.vscode/mcp.json` and `.mcp.json` the same trust as the workspace, so it doesn't ask again when their `command` changes. Add this to your VS Code **User** settings (Command Palette → **Preferences: Open User Settings (JSON)**), so edits to these files wait for your click:
+
+```jsonc
+{
+  "chat.tools.edits.autoApprove": {
+    "**/.vscode/mcp.json": false,
+    "**/.mcp.json": false,
+    "**/vscode-copilot-telegram.toml": false,
+    "**/.env": false
+  }
+}
+```
+
+More in [SECURITY.md](../SECURITY.md#accepting-the-allow-list).
 
 ## 10. Tell Copilot to use the tools
 
@@ -415,7 +432,9 @@ Do these in order in a fresh **Agent** chat in `PROJECT`. Each should pass befor
 - [ ] **Question:** ask Copilot *"Use ask_user to ask me which database to use, with options Postgres and SQLite"*. Tap one; Copilot gets your choice. Repeat and type a free-text answer instead.
 - [ ] **Only you:** while a request is waiting, send a text message to your bot from another Telegram account. Nothing happens, and the server output (MCP: List Servers → Show Output) shows `ignored message from unauthorized user …`.
 - [ ] **Chat mirror:** with the watcher running, send Copilot a prompt. Within a few seconds you get **🧑 You:** and then **🤖 Copilot:** messages.
-- [ ] **Audit log:** `PROJECT/.vscode-copilot-telegram/audit.jsonl` has one line per request with `decision` values like `approved`, `denied`, `denied-timeout`, `blocked`, `rejected`.
+- [ ] **Audit log:** `~/.vscode-copilot-telegram/audit-<project>-<hash>.jsonl` (the path is in the server output, step 8) has one line per request with `decision` values like `approved`, `denied`, `denied-timeout`, `blocked`, `rejected`.
+- [ ] **Allow list needs your acceptance:** add `allow = ['git status']` to `PROJECT/vscode-copilot-telegram.toml` and restart the server (MCP: List Servers → Restart). The server output has a warning that the allow list is not accepted. Ask Copilot to run `git status`: Telegram asks, and the message says the allow list is not accepted. Run `vscode-copilot-telegram --accept-policy --workspace PROJECT` in a normal terminal **and** in the VS Code terminal, read the patterns, and type `accept`. Restart the server and ask again: now `git status` shows **✅ Auto-approved** with no buttons. Add a second pattern to the file, restart, and check that it asks again.
+- [ ] **The accept command refuses scripts:** `echo accept | vscode-copilot-telegram --accept-policy --workspace PROJECT` prints `must be run by you` and saves nothing.
 - [ ] **Restart safety:** restart the MCP server (MCP: List Servers → Restart). Tap a button on an old request; it says *Already answered* or *expired*, and nothing runs twice.
 - [ ] **`/pending`:** while a request is waiting, send `/pending` to the bot; it lists the request id.
 

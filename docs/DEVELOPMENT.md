@@ -68,12 +68,12 @@ No test talks to the real Telegram API or needs a token. `VSCODE_COPILOT_TELEGRA
 The automated tests use a fake Telegram and hand-made session fixtures. As of 0.1.0, none of the following has been exercised:
 
 - **Real Telegram Bot API**: actual long polling, `409 Conflict` handling, rate limits (`retry_after`), HTML rendering of messages, `force_reply` for notes, message edits on old messages.
-- **Real VS Code + Copilot**: that Copilot agent mode reliably picks `run_command` once Run in Terminal is off; tool approval interplay; the Copilot harness reading `.mcp.json`; how `${workspaceFolder}` and `envFile` resolve on each OS.
+- **Real VS Code + Copilot**: that Copilot agent mode reliably picks `run_command` once Run in Terminal is off; tool approval interplay; the Copilot harness reading `.mcp.json`; how `${workspaceFolder}` resolves on each OS.
 - **Real chat session files** from current VS Code / Copilot Chat builds on Windows and macOS (the fixtures model the formats described below), including VS Code Server paths for tunnels.
 - **Windows specifics**: `cmd.exe` / PowerShell quoting through `run_command`, `taskkill /T` process-tree kill, Task Scheduler with `pythonw.exe`.
 - **macOS launchd** agent and privacy (TCC) prompts.
 - **`--accept-policy`** typed in a real terminal on Windows and Linux, and in the VS Code terminal. The tests run it as a script on every OS (it must refuse) and in a pseudo-terminal on macOS and Linux; I also ran it by hand on macOS. The Windows terminal and the VS Code terminal need a manual run ([SETUP §12](SETUP.md#12-end-to-end-verification-checklist)).
-- **The edit-approval setting** (`chat.tools.edits.autoApprove`) for the files that control the gate, and whether it also covers `.vscode/mcp.json` in every harness.
+- **The edit-approval setting** (`chat.tools.edits.autoApprove`) for the files that control the gate, and whether it covers `.mcp.json`.
 - **Registering the server in the user-level MCP configuration** (outside the project) so a project can't change its `command`: whether `${workspaceFolder}` and `--workspace` work there, and for the Copilot harness.
 - **Linux systemd** user service for the watcher.
 

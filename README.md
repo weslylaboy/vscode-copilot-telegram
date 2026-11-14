@@ -77,12 +77,8 @@ You need Python 3.11+, git, VS Code, and GitHub Copilot with agent mode. The ful
    TELEGRAM_USER_ID=123456789
    ```
 4. **Test Telegram:** `vscode-copilot-telegram --test --workspace /path/to/your/project`. It prints `sent` and you get a ✅ message.
-5. **Register the MCP server** in your project. VS Code can run an agent chat with different harnesses. Two matter here: **Local** and **Copilot** (these docs call the second one the "Copilot harness"). You choose one in the Session Target picker, and each one reads a different file:
-   - Local: copy [`examples/mcp.envfile.json`](examples/mcp.envfile.json) to `<project>/.vscode/mcp.json`.
-   - Copilot harness: copy [`examples/dot-mcp.json`](examples/dot-mcp.json) to `<project>/.mcp.json`.
-
-   Create both files. Use a Local session while VS Code still has it, because there you can turn off Run in Terminal. VS Code plans to remove Local sessions; after that, use the Copilot harness ([SETUP §7](docs/SETUP.md#7-local-vs-copilot-harness-sessions)). In both files, set `command` to the full path of `vscode-copilot-telegram` in your venv ([SETUP §8](docs/SETUP.md#8-register-the-mcp-server-in-your-project)).
-6. **In Copilot Chat** (agent mode): open **Configure Tools**, untick **Run in Terminal**, and tick **vscode-copilot-telegram**. Then run **Chat: Manage Tool Approval** and pre-approve the vscode-copilot-telegram tools. If a Copilot harness session doesn't let you untick Run in Terminal, use the settings in [SETUP §7](docs/SETUP.md#7-local-vs-copilot-harness-sessions).
+5. **Register the MCP server** in your project: copy [`examples/dot-mcp.json`](examples/dot-mcp.json) to `<project>/.mcp.json` and set `command` to the full path of `vscode-copilot-telegram` in your venv ([SETUP §8](docs/SETUP.md#8-register-the-mcp-server-in-your-project)). This project supports the Copilot harness (the default agent runtime) only; VS Code has deprecated the Local harness and it is not supported here ([SETUP §7](docs/SETUP.md#7-copilot-harness-and-the-built-in-terminal)).
+6. **In Copilot Chat** (agent mode): add the built-in-terminal settings from [SETUP §7](docs/SETUP.md#7-copilot-harness-and-the-built-in-terminal), keep the permission level on **Manual permissions**, and run **Chat: Manage Tool Approval** to pre-approve the vscode-copilot-telegram tools. If your build shows **Configure Tools**, also untick **Run in Terminal** there.
 7. **Tell Copilot to use the tools.** Paste [`examples/copilot-instructions.md`](examples/copilot-instructions.md) into `<project>/.github/copilot-instructions.md`.
 8. **Start the mirror:** `vscode-copilot-telegram-watch --workspace /path/to/your/project`.
 9. **Try it:** ask Copilot to *"use run_command to run `git status`"* and approve the request on your phone.
@@ -127,7 +123,7 @@ The automated tests use a fake Telegram and sample files. These still need a rea
 
 ### Left to do
 
-- [ ] Add a `preToolUse` hook that blocks the built-in terminal, so the gate also holds in Copilot harness sessions. This matters more once VS Code removes Local sessions ([SETUP §7](docs/SETUP.md#7-local-vs-copilot-harness-sessions)).
+- [ ] Add a `preToolUse` hook that blocks the built-in terminal, so the gate also holds in Copilot harness sessions. This matters more now that only the Copilot harness is supported ([SETUP §7](docs/SETUP.md#7-copilot-harness-and-the-built-in-terminal)).
 - [ ] Approval for file edits (today only shell commands are gated).
 - [ ] One poller shared by several VS Code windows, to remove the one-bot-per-window rule.
 - [ ] Full paths for the shells on Windows (`powershell`, `pwsh`, `cmd.exe`, `bash`), so a file with that name in the project can't run in place of the real shell. `taskkill` already uses its full path.

@@ -120,17 +120,17 @@ The storage folder exists but has no chat files. Newer Copilot builds (and Copil
 
 Symptoms: VS Code shows its own "Run command?" prompt, or commands run without a Telegram message.
 
-1. **Configure Tools:** in an Agent chat, open Configure Tools and untick **Run in Terminal** (and Run Task / Create and Run Task if present). This is per chat-mode; check again after switching modes or harness.
-2. **Copilot harness sessions** may not let you untick it. Apply the fallback in [SETUP §7](SETUP.md#7-local-vs-copilot-harness-sessions) (`chat.tools.eligibleForAutoApproval` with `"runInTerminal": false`, and `chat.tools.terminal.enableAutoApprove: false`) so the built-in tool can never run anything without a click, or switch the session to **Local**.
-3. **Instructions:** check `PROJECT/.github/copilot-instructions.md` contains the lines from [`examples/copilot-instructions.md`](../examples/copilot-instructions.md), and that `github.copilot.chat.codeGeneration.useInstructionFiles` is on.
-4. **Tool enabled:** in Configure Tools, the vscode-copilot-telegram server and `run_command` must be ticked.
-5. **Ask explicitly** once: "Use run_command for this." Models tend to follow the instructions file after that.
-6. **Don't use Allow all / Autopilot** permission levels for this workspace; they skip confirmation for built-in tools.
+1. **Settings:** apply [SETUP §7](SETUP.md#7-copilot-harness-and-the-built-in-terminal) (`chat.tools.eligibleForAutoApproval` with `"runInTerminal": false`, and `chat.tools.terminal.enableAutoApprove: false`) so the built-in tool can never run anything without a click. If your build shows **Configure Tools**, also untick **Run in Terminal** (and Run Task / Create and Run Task if present).
+2. **Instructions:** check `PROJECT/.github/copilot-instructions.md` contains the lines from [`examples/copilot-instructions.md`](../examples/copilot-instructions.md), and that `github.copilot.chat.codeGeneration.useInstructionFiles` is on.
+3. **Tool enabled:** the vscode-copilot-telegram server and `run_command` must be enabled (in Configure Tools, if you have it).
+4. **Ask explicitly** once: "Use run_command for this." Models tend to follow the instructions file after that.
+5. **Don't use Allow all / Autopilot** permission levels for this workspace; they skip confirmation for built-in tools.
 
 ## The server doesn't show up in Copilot
 
-- **Wrong file for your harness.** Local sessions read `PROJECT/.vscode/mcp.json` (`"servers"`). Copilot harness sessions read `PROJECT/.mcp.json` at the root (`"mcpServers"`). See [SETUP §7–8](SETUP.md#7-local-vs-copilot-harness-sessions).
-- **JSON error.** `.vscode/mcp.json` allows comments; `.mcp.json` should be plain JSON. VS Code underlines errors.
+- **Wrong file.** The Copilot harness reads `PROJECT/.mcp.json` at the root (`"mcpServers"`). `.vscode/mcp.json` (the deprecated Local harness) is not supported. See [SETUP §8](SETUP.md#8-register-the-mcp-server-in-your-project).
+- **JSON error.** `.mcp.json` must be plain JSON (no comments). VS Code underlines errors.
+- **Sandbox.** If the output says `MCP server failed to initialize inside the sandbox` or `PermissionError: ... pyvenv.cfg`, set `chat.agent.sandbox.mcpServers` to `false` in your User settings and restart the server.
 - **Wrong command path.** Use the full path to the venv executable (`…\.venv\Scripts\vscode-copilot-telegram.exe` on Windows, `…/.venv/bin/vscode-copilot-telegram` on macOS). Test it by running that exact path with `--help` in a terminal.
 - **Workspace trust / MCP disabled by policy.** Trust the workspace when VS Code asks. Organizations can disable MCP servers (`chat.mcp.access`); if MCP is turned off by your enterprise, vscode-copilot-telegram can't be used.
 - **Server output shows a Python traceback** at startup: reinstall with `pip install -e .` in the venv, and make sure it's Python 3.11+.

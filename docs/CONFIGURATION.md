@@ -37,8 +37,6 @@ Missing files are skipped.
 | Method | Where | Notes |
 | --- | --- | --- |
 | Shared `.env` file (recommended) | `~/.config/vscode-copilot-telegram/.env` | Works for every project and for the watcher. Outside every repo. |
-| `envFile` in `.vscode/mcp.json` | [`examples/mcp.envfile.json`](../examples/mcp.envfile.json) | Same file, made explicit to VS Code. Local harness only. |
-| VS Code input prompts | [`examples/mcp.json`](../examples/mcp.json) | VS Code asks once and keeps the value in its secret storage. Local harness only. The watcher still needs the `.env` file or real environment variables. |
 | Real environment variables | your shell profile, or `env` in `.mcp.json` | Don't write literal tokens into a committed `.mcp.json`. |
 
 ## `vscode-copilot-telegram.toml`

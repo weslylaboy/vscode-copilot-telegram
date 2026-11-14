@@ -24,8 +24,8 @@ First release. Replace "unreleased" with the date when you tag it.
 - `vscode-copilot-telegram --test` to check the bot setup.
 - Optional `vscode-copilot-telegram.toml` (timeouts, output limits, shell, allow/block lists, project label).
 - Failures that don't stop a request (a failed answer to a button tap, a failed short message, an error while closing the poller) are written to the server log as warnings.
-- Examples for `.vscode/mcp.json` (Local harness), `.mcp.json` (Copilot harness), `.env`, and `.github/copilot-instructions.md`, and a `.env.example` that documents every variable.
-- Docs: setup for Windows, macOS, and Linux (systemd), the Local and Copilot harness explained, configuration, troubleshooting, architecture, development, and security (including the VS Code setting that asks for a click before Copilot edits the files that control the gate).
+- Examples for `.mcp.json` (Copilot harness), `.env`, and `.github/copilot-instructions.md`, and a `.env.example` that documents every variable.
+- Docs: setup for Windows, macOS, and Linux (systemd), the Copilot harness (the Local harness is deprecated by VS Code and not supported), configuration, troubleshooting, architecture, development, and security (including the VS Code setting that asks for a click before Copilot edits the files that control the gate).
 - Instructions for coding agents that work on this repository (`AGENTS.md`, `.github/copilot-instructions.md`, `CLAUDE.md`).
 - GitHub Actions runs the tests on Linux, macOS, and Windows (Python 3.11 and 3.12) and a `mypy` type check; the code type-checks clean. The number of automated tests is in `docs/DEVELOPMENT.md`.
 

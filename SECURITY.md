@@ -9,7 +9,7 @@ vscode-copilot-telegram puts a human approval step between GitHub Copilot and yo
 | Threat | Mitigation | Residual risk |
 | --- | --- | --- |
 | Copilot runs a harmful command (model mistake or prompt injection from code, docs, web pages, or tool output) | Every command needs your **Approve** tap; built-in block list; workspace jail for `cwd`; timeout = deny | You approve something harmful without reading it. The block list is pattern-based and can be evaded; it's a safety net, not a sandbox. |
-| Copilot bypasses the gate via its built-in terminal | You turn off Run in Terminal; fallback settings force VS Code's own prompt | If the built-in tool is left on and auto-approved, commands never reach Telegram. See [SETUP §7](docs/SETUP.md#7-local-vs-copilot-harness-sessions). |
+| Copilot bypasses the gate via its built-in terminal | You turn off Run in Terminal; fallback settings force VS Code's own prompt | If the built-in tool is left on and auto-approved, commands never reach Telegram. See [SETUP §7](docs/SETUP.md#7-copilot-harness-and-the-built-in-terminal). |
 | A command escapes the workspace | `cwd` must resolve (after symlinks) inside the workspace | `cwd` only sets the starting folder. An approved command can still `cd ..` or touch absolute paths. Read what you approve. |
 | Someone else answers your approvals | Only updates from `TELEGRAM_USER_ID` in that chat are accepted | Anyone with access to your unlocked phone or Telegram session can tap Approve. Use Telegram's passcode lock and review active sessions. |
 | Replay of an old approval | Random per-request ids, single-use, persisted across restarts; timeouts are marked answered | — |
@@ -40,7 +40,7 @@ Files inside the project can decide how the gate works. Copilot can create or ed
 | --- | --- | --- |
 | `.env` in the project root | Nothing. Before, it could replace the Telegram credentials (so another person received and approved the requests) and the Bot API address (so another server received the bot token and answered the approvals). | **Yes.** The file is never read. If it has `TELEGRAM_*`, `VSCODE_COPILOT_TELEGRAM_*`, or `LOG_PATH`, the server and the watcher log a warning and ignore them. |
 | `vscode-copilot-telegram.toml` | `allow` decides what runs with no tap. A pattern that matches everything auto-approves every command that has no chaining characters. `use_default_block = false` turns off the built-in block list. | **Partly.** `allow` and `use_default_block = false` are ignored until you accept them yourself with `--accept-policy` (see below). The other keys (timeouts, `shell`, `block`, `project_name`) can't make a command run without your tap, so they are trusted as written. `log_path` is ignored (with a warning). |
-| `.vscode/mcp.json` and `.mcp.json` | Which program VS Code starts as the server, with which `--workspace` and which environment. | **No.** VS Code reads these, not this tool. |
+| `.mcp.json` | Which program VS Code starts as the server, with which `--workspace` and which environment. | **No.** VS Code reads this, not this tool. |
 
 A change to the MCP config takes effect the next time VS Code starts the server.
 
@@ -64,14 +64,13 @@ What you can do:
 
   ```jsonc
   "chat.tools.edits.autoApprove": {
-    "**/.vscode/mcp.json": false,
     "**/.mcp.json": false,
     "**/vscode-copilot-telegram.toml": false,
     "**/.env": false
   }
   ```
 
-  This is the setting VS Code recommends for sensitive files ([VS Code security page](https://code.visualstudio.com/docs/agents/run/security), step 4). An edit then waits for your click, so you see it before the server restarts. Servers in `.vscode/mcp.json` and `.mcp.json` inherit Workspace Trust, so VS Code doesn't ask again when their `command` changes; this setting is how you get a chance to look.
+  This is the setting VS Code recommends for sensitive files ([VS Code security page](https://code.visualstudio.com/docs/agents/run/security), step 4). An edit then waits for your click, so you see it before the server restarts. Servers in `.mcp.json` inherit Workspace Trust, so VS Code doesn't ask again when their `command` changes; this setting is how you get a chance to look.
 - Keep the file named by `VSCODE_COPILOT_TELEGRAM_ENV_FILE` outside the project. If it points to a file inside the project, that file has the same problem the project `.env` had.
 - If a warning says the allow list is not accepted and you didn't change it, find out who did (`git diff`) before you accept it again.
 
@@ -80,9 +79,8 @@ Not tested yet: registering the server in your **user-level** MCP configuration 
 ## Token storage
 
 - Store `TELEGRAM_BOT_TOKEN` and `TELEGRAM_USER_ID` in `~/.config/vscode-copilot-telegram/.env` (Windows: `C:\Users\YOU\.config\vscode-copilot-telegram\.env`). On macOS/Linux, `chmod 600` it.
-- Or let VS Code prompt for it and keep it in its secret storage ([`examples/mcp.json`](examples/mcp.json)).
 - Never commit a token. The repo's `.gitignore` excludes `.env`, `.env.*`, and `.vscode-copilot-telegram/`. Add `.env` and `.vscode-copilot-telegram/` to each project's `.gitignore` too.
-- Don't put literal tokens in `.vscode/mcp.json` or `.mcp.json`; those files are often committed.
+- Don't put literal tokens in `.mcp.json`; that file is often committed.
 - If a token leaks: in @BotFather, `/mybots` → your bot → **API Token → Revoke current token**, then update the `.env` file and restart the server and watcher.
 
 ## Data sent to Telegram

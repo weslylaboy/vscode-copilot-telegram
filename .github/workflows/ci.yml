@@ -1,4 +1,4 @@
-# Runs the test suite on every branch push and pull request.
+# Runs the test suite on every branch push and pull request, on Linux, macOS, and Windows.
 name: tests
 
 on:
@@ -10,11 +10,12 @@ permissions:
 
 jobs:
   pytest:
-    name: python ${{ matrix.python-version }}
-    runs-on: ubuntu-latest
+    name: ${{ matrix.os }}, python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
@@ -25,5 +26,7 @@ jobs:
           cache-dependency-path: pyproject.toml
       - run: python --version
       - run: pip install -e ".[dev]"
+      # The type check does not depend on the operating system, so run it once.
       - run: mypy
+        if: matrix.os == 'ubuntu-latest'
       - run: pytest -q

@@ -15,7 +15,8 @@ from mcp.client.stdio import stdio_client
 def _params(workspace, **env):
     base = {k: v for k, v in os.environ.items() if k not in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_USER_ID")}
     base.update({"TELEGRAM_BOT_TOKEN": "123456:FAKE-TOKEN-FOR-TESTS", "TELEGRAM_USER_ID": "4242",
-                 "VSCODE_COPILOT_TELEGRAM_API_BASE": "http://127.0.0.1:9", **env})
+                 "VSCODE_COPILOT_TELEGRAM_API_BASE": "http://127.0.0.1:9",
+                 "LOG_PATH": str(workspace / ".vscode-copilot-telegram" / "audit.jsonl"), **env})
     return StdioServerParameters(command=sys.executable, args=["-m", "vscode_copilot_telegram", "--log-level", "WARNING"],
                                  env=base, cwd=str(workspace))
 

@@ -1,3 +1,10 @@
+import os
+import subprocess
+import sys
+import time
+import tomllib
+from pathlib import Path
+
 import pytest
 
 from vscode_copilot_telegram import config
@@ -35,7 +42,7 @@ def test_project_env_cannot_change_who_approves_or_where_the_server_connects(env
     creds = config.telegram_credentials()
     assert (creds.token, creds.user_id) == ("222:from-home", 4242)
     assert "VSCODE_COPILOT_TELEGRAM_API_BASE" not in env and "LOG_PATH" not in env and "OTHER" not in env
-    assert config.load_settings(project).log_path == project / ".vscode-copilot-telegram" / "audit.jsonl"
+    assert config.load_settings(project).log_path == config.default_audit_path(project.resolve())
     # the caller can still tell the user which settings were left out (names only, never values)
     assert config.ignored_project_env_names(project) == [
         "LOG_PATH", "TELEGRAM_BOT_TOKEN", "TELEGRAM_USER_ID", "VSCODE_COPILOT_TELEGRAM_API_BASE"]
@@ -160,3 +167,162 @@ def test_accept_command_rejects_a_bad_pattern(env, tmp_path):
 
     assert config.accept_policy(project, ask=lambda _: "accept", interactive=True) == 1
     assert not config.accepted_policy_path().exists()
+
+
+# ---------- the audit log lives outside the project ----------
+
+def test_audit_log_default_is_outside_the_project(env, tmp_path):
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    log_path = config.load_settings(project).log_path
+
+    assert not log_path.is_relative_to(project.resolve())
+    assert log_path.parent == tmp_path / "home" / ".vscode-copilot-telegram" and log_path.name.startswith("audit-proj-")
+
+
+def test_log_path_in_the_project_file_is_ignored_with_a_warning(env, tmp_path):
+    project = tmp_path / "proj"
+    _toml(project, "log_path = 'elsewhere.jsonl'\n")
+
+    s = config.load_settings(project)
+
+    assert s.log_path == config.default_audit_path(project.resolve())  # the setting has no effect
+    assert len(s.startup_warnings) == 1
+    assert "no longer read" in s.startup_warnings[0] and str(s.log_path) in s.startup_warnings[0]
+    assert "older audit log" not in s.startup_warnings[0]  # nothing is left at the old place
+
+
+def test_the_warning_names_an_older_audit_log_that_is_still_there(env, tmp_path):
+    project = tmp_path / "proj"
+    _toml(project, "log_path = 'old/custom.jsonl'\n")
+    for old in (project / ".vscode-copilot-telegram" / "audit.jsonl", project / "old" / "custom.jsonl"):
+        old.parent.mkdir(parents=True, exist_ok=True)
+        old.write_text("{}\n", "utf-8")
+
+    warning = config.load_settings(project).startup_warnings[0]
+
+    assert "older audit log is still at" in warning
+    assert str(project.resolve() / ".vscode-copilot-telegram" / "audit.jsonl") in warning
+    assert str(project.resolve() / "old" / "custom.jsonl") in warning
+
+
+def test_the_server_still_starts_and_logs_the_warning_for_a_leftover_log_path(env, tmp_path, caplog):
+    from vscode_copilot_telegram import server
+
+    project = tmp_path / "proj"
+    _toml(project, 'log_path = ".vscode-copilot-telegram/audit.jsonl"\n')  # the first example file had this line
+    env["TELEGRAM_BOT_TOKEN"], env["TELEGRAM_USER_ID"] = "111:fake", "4242"
+
+    with caplog.at_level("WARNING", logger="vscode_copilot_telegram"):
+        bridge = server.build_bridge(str(project))
+
+    assert "no longer read" in caplog.text
+    assert bridge.s.log_path == config.default_audit_path(project.resolve())
+    assert bridge.s.policy_warning == ""  # not stopped, and nothing else changed
+
+
+def test_log_path_can_still_be_set_in_the_environment(env, tmp_path):
+    project = tmp_path / "proj"
+    project.mkdir()
+    env["LOG_PATH"] = "logs/audit.jsonl"  # relative paths are relative to the workspace
+
+    assert config.load_settings(project).log_path == project.resolve() / "logs" / "audit.jsonl"
+
+
+# ---------- checks when you accept an allow list ----------
+
+@pytest.mark.parametrize("pattern", [".*", r"\S+", r"[\w-]+( .*)?", r"\w+|.+"])
+def test_accept_refuses_patterns_that_approve_every_command(env, tmp_path, capsys, pattern):
+    project = tmp_path / "proj"
+    _toml(project, f"allow = ['git status', '{pattern}']\n")
+
+    assert config.accept_policy(project, ask=lambda _: "accept", interactive=True) == 1
+
+    assert pattern in capsys.readouterr().err
+    assert config.load_settings(project).allow == []  # nothing was saved
+
+
+def test_accept_warns_when_a_pattern_also_approves_risky_commands(env, tmp_path, capsys):
+    project = tmp_path / "proj"
+    _toml(project, "allow = ['git (status|diff|log)( .*)?', 'npm (test|run lint)']\n")
+
+    assert config.accept_policy(project, ask=lambda _: "accept", interactive=True) == 0
+
+    lines = capsys.readouterr().out.splitlines()
+    warnings = [x for x in lines if "WARNING: also approves" in x]
+    assert len(warnings) == 1 and "git diff --output=/tmp/out.txt" in warnings[0]
+    assert lines[lines.index("  git (status|diff|log)( .*)?") + 1] == warnings[0]  # right under its own pattern
+
+
+def test_example_allow_list_is_narrow():
+    example = Path(__file__).parent.parent / "examples" / "vscode-copilot-telegram.toml"
+    allow = tomllib.loads(example.read_text("utf-8"))["allow"]
+
+    assert allow
+    for pattern in allow:
+        assert not config.approves_anything(pattern), pattern
+        assert config.risky_samples_approved(pattern) == [], pattern
+
+
+def test_accepted_copy_inside_the_workspace_is_not_trusted(env, tmp_path, capsys):
+    home = tmp_path / "home"  # your home folder was opened as the workspace
+    _toml(home, "allow = ['git status']\n")
+    config.save_accepted_policy(home.resolve(), ["git status"], True)
+
+    s = config.load_settings(home)
+
+    assert s.allow == [] and "inside this workspace" in s.policy_warning
+    assert config.accept_policy(home, ask=lambda _: "accept", interactive=True) == 1
+    assert "inside" in capsys.readouterr().err
+
+
+# ---------- the accept command, run as a real program ----------
+
+def test_accept_command_refuses_when_run_as_a_script(env, tmp_path):
+    project = tmp_path / "proj"
+    _toml(project, "allow = ['git status']\n")
+
+    done = subprocess.run([sys.executable, "-m", "vscode_copilot_telegram", "--accept-policy", "--workspace",
+                           str(project)], env=env, input="accept\n", capture_output=True, text=True, timeout=120)
+
+    assert done.returncode == 1 and "must be run by you" in done.stderr
+    assert not config.accepted_policy_path().exists()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="needs a pseudo-terminal")
+def test_accept_command_in_a_real_terminal(env, tmp_path):
+    import pty
+    import select
+
+    project = tmp_path / "proj"
+    _toml(project, "allow = ['git status']\n")
+    master, slave = pty.openpty()
+    proc = subprocess.Popen([sys.executable, "-m", "vscode_copilot_telegram", "--accept-policy", "--workspace",
+                             str(project)], stdin=slave, stdout=slave, stderr=slave, env=env, close_fds=True)
+    os.close(slave)
+    out, typed = b"", False
+    try:
+        deadline = time.monotonic() + 90
+        while time.monotonic() < deadline:
+            if select.select([master], [], [], 1)[0]:
+                try:
+                    chunk = os.read(master, 4096)
+                except OSError:  # the program ended and closed its side
+                    break
+                if not chunk:
+                    break
+                out += chunk
+                if not typed and b"Type 'accept'" in out:
+                    os.write(master, b"accept\n")
+                    typed = True
+            elif proc.poll() is not None:
+                break
+        proc.wait(timeout=15)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+        os.close(master)
+
+    assert typed and proc.returncode == 0, out.decode(errors="replace")
+    assert config.load_settings(project).allow == ["git status"]

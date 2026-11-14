@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -24,6 +25,12 @@ class ConfigError(RuntimeError):
     pass
 
 
+def default_audit_path(workspace_root: Path) -> Path:
+    """The audit log lives outside the project: Copilot's file edits can only reach the workspace."""
+    digest = hashlib.sha256(str(workspace_root).encode("utf-8")).hexdigest()[:12]
+    return Path.home() / ".vscode-copilot-telegram" / f"audit-{workspace_root.name or 'workspace'}-{digest}.jsonl"
+
+
 @dataclass
 class Settings:
     workspace_root: Path
@@ -40,13 +47,15 @@ class Settings:
     project_name: str = ""
     # Set by load_settings when the project file asks for auto-approval that you have not accepted.
     policy_warning: str = ""
+    # Other things to tell the user at start-up (the server logs them).
+    startup_warnings: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         self.workspace_root = Path(self.workspace_root).expanduser().resolve()
         if not self.project_name:
             self.project_name = self.workspace_root.name or str(self.workspace_root)
         if self.log_path is None:
-            self.log_path = self.workspace_root / ".vscode-copilot-telegram" / "audit.jsonl"
+            self.log_path = default_audit_path(self.workspace_root)
         else:
             p = Path(self.log_path).expanduser()
             self.log_path = p if p.is_absolute() else self.workspace_root / p
@@ -111,25 +120,48 @@ def resolve_workspace_root(cli_value: str | None = None) -> Path:
     return Path(raw).expanduser().resolve()
 
 
+def _legacy_log_path_warning(cfg: Path, s: Settings, value: object) -> str:
+    """A leftover log_path (the first version's example file had one) is ignored, not an error: ignoring it
+    doesn't weaken the gate. Say where the log is now, and name an older log file if one is still there."""
+    candidates = [s.workspace_root / ".vscode-copilot-telegram" / "audit.jsonl"]
+    if isinstance(value, str) and value:
+        p = Path(value).expanduser()
+        candidates.append(p if p.is_absolute() else s.workspace_root / p)
+    old: list[Path] = []
+    for p in candidates:
+        try:
+            if p != s.log_path and p not in old and p.is_file():
+                old.append(p)
+        except OSError:
+            pass
+    msg = (f"{cfg} sets log_path, which is no longer read, because Copilot can edit that file. The audit log is "
+           f"now {s.log_path}. To choose another place, set LOG_PATH in the server's environment.")
+    if old:
+        msg += f" An older audit log is still at {', '.join(str(p) for p in old)}; move or delete it."
+    return msg
+
+
 def _load_raw_settings(workspace_root: Path) -> Settings:
     """Read the project TOML and the environment. Does not check whether the allow list was accepted."""
     data: dict = {}
+    legacy_log_path: object = None
     cfg = Path(workspace_root) / CONFIG_FILENAME
     if cfg.is_file():
         with cfg.open("rb") as fh:
             data = tomllib.load(fh)
         if "token" in data or "bot_token" in data:
             raise ConfigError(f"{cfg}: do not put the bot token in the config file; use TELEGRAM_BOT_TOKEN")
+        legacy_log_path = data.pop("log_path", None)
     known = {"timeout_s", "run_timeout_s", "max_output_chars", "telegram_output_chars", "allow",
-             "block", "use_default_block", "shell", "log_path", "project_name"}
+             "block", "use_default_block", "shell", "project_name"}
     unknown = set(data) - known
     if unknown:
         raise ConfigError(f"{cfg}: unknown keys {sorted(unknown)}")
-    if "log_path" in data:
-        data["log_path"] = Path(data["log_path"])
     if os.environ.get("LOG_PATH"):
         data["log_path"] = Path(os.environ["LOG_PATH"])
     s = Settings(workspace_root=workspace_root, **data)
+    if legacy_log_path is not None:
+        s.startup_warnings.append(_legacy_log_path_warning(cfg, s, legacy_log_path))
     if s.shell not in {"default", "bash", "powershell", "pwsh", "cmd", "sh"}:
         raise ConfigError(f"shell must be one of default, sh, bash, powershell, pwsh, cmd (got {s.shell!r})")
     for name in ("timeout_s", "run_timeout_s", "max_output_chars"):
@@ -169,6 +201,36 @@ def is_policy_accepted(workspace_root: Path, allow: list[str], use_default_block
     return _read_accepted().get(str(workspace_root)) == _policy(allow, use_default_block)
 
 
+def accepted_policy_inside_workspace(workspace_root: Path) -> bool:
+    """True if the accepted copy sits where Copilot's file edits can reach it (for example, your home folder
+    was opened as the workspace). Then acceptance can't be trusted."""
+    try:
+        return accepted_policy_path().resolve().is_relative_to(Path(workspace_root).resolve())
+    except (OSError, RuntimeError):
+        return True  # can't tell: fail closed
+
+
+# Commands people don't expect an allow list to approve. Used only to warn you when you accept.
+RISKY_SAMPLES = (
+    "rm -rf build", "git push origin main", "git reset --hard", "git checkout -- .", "git config core.pager sh",
+    "git diff --output=/tmp/out.txt", "npm install some-package", "pip install some-package",
+    "python -c 'print(1)'", "python script.py", "node script.js", "bash script.sh", "curl https://example.com",
+    "docker run alpine", "cat ~/.ssh/id_rsa", "ls ../..", "pytest ../other-project",
+)
+# Made-up commands. A pattern that approves one of these approves (nearly) every command.
+_ANYTHING_SAMPLES = ("zq-no-such-command", "zq-no-such-command 12345 --flag value")
+
+
+def approves_anything(pattern: str) -> bool:
+    rx = re.compile(pattern, re.IGNORECASE)
+    return any(rx.fullmatch(c) for c in _ANYTHING_SAMPLES)
+
+
+def risky_samples_approved(pattern: str) -> list[str]:
+    rx = re.compile(pattern, re.IGNORECASE)
+    return [c for c in RISKY_SAMPLES if rx.fullmatch(c)]
+
+
 def save_accepted_policy(workspace_root: Path, allow: list[str], use_default_block: bool) -> Path:
     path = accepted_policy_path()
     workspaces = _read_accepted()
@@ -186,15 +248,23 @@ def save_accepted_policy(workspace_root: Path, allow: list[str], use_default_blo
 
 def load_settings(workspace_root: Path) -> Settings:
     s = _load_raw_settings(workspace_root)
-    if policy_needs_acceptance(s) and not is_policy_accepted(s.workspace_root, s.allow, s.use_default_block):
-        what = " and ".join(x for x in (f"an allow list with {len(s.allow)} pattern(s)" if s.allow else "",
-                                         "use_default_block = false" if not s.use_default_block else "") if x)
-        s.policy_warning = (f"{CONFIG_FILENAME} sets {what}, but you have not accepted it, so it is ignored: "
-                            "every command asks in Telegram and the built-in block list stays on. Read the "
-                            "file, then run in your own terminal: "
-                            f"vscode-copilot-telegram --accept-policy --workspace {s.workspace_root}")
-        s.allow = []
-        s.use_default_block = True
+    if not policy_needs_acceptance(s):
+        return s
+    inside = accepted_policy_inside_workspace(s.workspace_root)
+    if not inside and is_policy_accepted(s.workspace_root, s.allow, s.use_default_block):
+        return s
+    what = " and ".join(x for x in (f"an allow list with {len(s.allow)} pattern(s)" if s.allow else "",
+                                     "use_default_block = false" if not s.use_default_block else "") if x)
+    if inside:
+        why = (f"the accepted copy ({accepted_policy_path()}) is inside this workspace, where Copilot's file "
+               "edits could change it. Open a project folder, not your home folder")
+    else:
+        why = ("you have not accepted it. Read the file, then run in your own terminal: "
+               f"vscode-copilot-telegram --accept-policy --workspace {s.workspace_root}")
+    s.policy_warning = (f"{CONFIG_FILENAME} sets {what}, which is ignored: {why}. Until then every command asks "
+                        "in Telegram and the built-in block list stays on.")
+    s.allow = []
+    s.use_default_block = True
     return s
 
 
@@ -210,20 +280,33 @@ def accept_policy(workspace_root: Path, *, ask: Callable[[str], str] = input,
         return 1
     try:
         s = _load_raw_settings(root)
-        for pattern in s.allow:
-            re.compile(pattern)
+        broad = [p for p in s.allow if approves_anything(p)]
+        risky = {p: risky_samples_approved(p) for p in s.allow}
     except (ConfigError, ValueError, re.error) as exc:
         print(f"vscode-copilot-telegram: {exc}", file=sys.stderr)
         return 1
     if not policy_needs_acceptance(s):
         print(f"Nothing to accept for {root}: no allow list, and the built-in block list is on.")
         return 0
+    if accepted_policy_inside_workspace(root):
+        print(f"vscode-copilot-telegram: {accepted_policy_path()} is inside {root}, where Copilot's file edits "
+              "could change it. Open a project folder, not your home folder.", file=sys.stderr)
+        return 1
+    if broad:
+        print("vscode-copilot-telegram: these patterns approve (almost) every command, so they are refused:",
+              file=sys.stderr)
+        for pattern in broad:
+            print(f"  {pattern}", file=sys.stderr)
+        print("Write patterns for the exact commands you trust, for example 'git status'.", file=sys.stderr)
+        return 1
     print(f"Workspace: {root}\nFile:      {root / CONFIG_FILENAME}\n")
     if s.allow:
         print("These commands will run WITHOUT asking you (each pattern must match the whole command; "
               "commands with ; && || | ` $( > < or a newline still ask):")
         for pattern in s.allow:
             print(f"  {pattern}")
+            if risky[pattern]:
+                print(f"    WARNING: also approves, for example: {', '.join(risky[pattern][:4])}")
     if not s.use_default_block:
         print("The built-in block list (rm -rf /, force push, curl | sh, ...) will be OFF.")
     print("\nIf this file was written by Copilot, or came with a repository you cloned, read it before you accept.")

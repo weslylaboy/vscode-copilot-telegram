@@ -108,6 +108,8 @@ def build_bridge(workspace: str | None) -> Bridge:
                     "~/.config/vscode-copilot-telegram/.env or in the file named by "
                     "VSCODE_COPILOT_TELEGRAM_ENV_FILE.", root / ".env", ", ".join(ignored))
     settings = load_settings(root)
+    for warning in settings.startup_warnings:
+        log.warning("%s", warning)
     if settings.policy_warning:
         log.warning("%s", settings.policy_warning)
     creds = telegram_credentials()

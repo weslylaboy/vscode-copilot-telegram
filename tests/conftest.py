@@ -13,6 +13,15 @@ FIXTURES = Path(__file__).parent / "fixtures"
 USER_ID = 4242
 
 
+@pytest.fixture(autouse=True)
+def isolated_home(tmp_path, monkeypatch):
+    """No test may read or write the real home folder (audit logs, the accepted allow list, .env files)."""
+    home = tmp_path / "home-isolated"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+
+
 class FakeTelegram:
     """In-memory stand-in for TelegramAPI. Tests push updates with ``push``."""
 
@@ -100,6 +109,7 @@ def workspace(tmp_path):
 @pytest.fixture
 def make_bridge(workspace, fake_tg):
     def _make(**settings_kw):
+        settings_kw.setdefault("log_path", workspace / ".vscode-copilot-telegram" / "audit.jsonl")
         settings = Settings(workspace_root=workspace, **settings_kw)
         broker = Broker(fake_tg, USER_ID, state_dir=settings.state_dir, poll_timeout=0)
         runner = FakeRunner()

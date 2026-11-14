@@ -6,16 +6,19 @@ run_timeout_s = 900        # an approved command is killed after this long
 max_output_chars = 8000    # output returned to Copilot
 telegram_output_chars = 1500
 shell = "default"          # default | sh | bash | powershell | pwsh | cmd
-log_path = ".vscode-copilot-telegram/audit.jsonl"
 
 # Regexes that must match the WHOLE command. Commands containing ; && || | ` $( > < or a
 # newline are never auto-approved. Auto-approved commands still post a notice to Telegram.
 # The allow list is ignored until YOU accept it: run `vscode-copilot-telegram --accept-policy
 # --workspace .` in your own terminal. Any later change to the list asks you to accept it again.
+# Keep patterns narrow. ' .*' accepts any argument (`git diff --output=file` writes a file). Test
+# runners and build tools (pytest, npm test, make) are left out on purpose: they run any code in
+# the project, including code Copilot just wrote.
 allow = [
-  'git (status|diff|log)( .*)?',
-  'npm (test|run lint)',
-  'pytest( -q)?( [\w/.-]+)*',
+  'git status',
+  'git diff( --stat)?',
+  'git log( --oneline)?( -[0-9]+)?',
+  'ls( -[a-zA-Z]+)?',
 ]
 
 # Regexes searched anywhere in the command. Added to the built-in block list.

@@ -1,228 +1,282 @@
-# Setup guide
+# Setup
 
-This guide takes you from nothing to "Copilot asks, my phone answers" on **Windows (PowerShell)** and **macOS**. Linux works the same as macOS except for the paths noted in [CONFIGURATION.md](CONFIGURATION.md) and the auto-start section.
+Install the tool, connect it to Telegram, and approve your first command. It works on Windows, macOS, and Linux.
 
-Plan on about 20 minutes. Every step ends with a check, so you know it worked before moving on.
+There are two different folders in this guide. Do not mix them:
 
-Throughout this guide:
+- `TOOL_DIR` is this tool. It is the folder `vscode-copilot-telegram` that `git clone` creates in [step 3](#3-install).
+- `PROJECT` is your own project, the project you want Copilot to work on. It is the folder you open in VS Code. The tool is set up for this folder, and it can only run commands inside it.
 
-| Placeholder | Meaning | Windows example | macOS example |
-| --- | --- | --- | --- |
-| `TOOL_DIR` | Where you install vscode-copilot-telegram (its own folder, **not** inside your project) | `C:\Users\YOU\tools\vscode-copilot-telegram` | `/Users/YOU/tools/vscode-copilot-telegram` |
-| `PROJECT` | The project folder you open in VS Code | `C:\Users\YOU\code\your-project` | `/Users/YOU/code/your-project` |
+In the commands, write the full path instead of the words `TOOL_DIR` and `PROJECT`.
 
-Contents:
+Install the tool once, in its own folder. Do not install it inside `PROJECT`. You do not need to change the code of the tool. You only add two small files to `PROJECT`: `.mcp.json` and `.github/copilot-instructions.md`.
 
-1. [Prerequisites](#1-prerequisites)
-2. [Create the Telegram bot](#2-create-the-telegram-bot)
-3. [Get your Telegram user id](#3-get-your-telegram-user-id)
-4. [Clone and install](#4-clone-and-install)
-5. [Save the token and user id](#5-save-the-token-and-user-id)
-6. [Test Telegram](#6-test-telegram)
-7. [Copilot harness and the built-in terminal](#7-copilot-harness-and-the-built-in-terminal)
-8. [Register the MCP server in your project](#8-register-the-mcp-server-in-your-project)
-9. [Block the built-in terminal and auto-approve the vscode-copilot-telegram tools](#9-block-the-built-in-terminal-and-auto-approve-the-vscode-copilot-telegram-tools)
-10. [Tell Copilot to use the tools](#10-tell-copilot-to-use-the-tools)
-11. [Run the chat mirror and keep it running](#11-run-the-chat-mirror-and-keep-it-running)
-12. [End-to-end verification checklist](#12-end-to-end-verification-checklist)
-13. [Updating and uninstalling](#13-updating-and-uninstalling)
+## TLDR
 
----
+The steps below explain each line.
 
-## 1. Prerequisites
+```bash
+# 1. Install (creates the folder vscode-copilot-telegram = TOOL_DIR)
+git clone https://github.com/weslylaboy/vscode-copilot-telegram.git
+cd vscode-copilot-telegram
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
 
-- **Python 3.11 or newer.**
-  - Windows: install from [python.org](https://www.python.org/downloads/windows/) and tick **"Add python.exe to PATH"**, or run `winget install Python.Python.3.12`. Check with `py -3 --version`.
-  - macOS: `brew install python@3.12` (or the python.org installer). Check with `python3 --version`. The system Python on older macOS is too old.
-- **git.** Windows: `winget install Git.Git`. macOS: `xcode-select --install` or `brew install git`.
-- **VS Code** with the **GitHub Copilot** and **GitHub Copilot Chat** extensions, signed in with the account that has your Copilot license, and **agent mode** available in the chat view.
-- **Telegram** on your phone (and optionally desktop).
-- Outbound HTTPS to `api.telegram.org` from the computer that runs VS Code's extension host. If you use VS Code Remote Tunnels or SSH, that's the **remote** machine, so install vscode-copilot-telegram there.
+# 2. Credentials (token from @BotFather, id from @userinfobot)
+mkdir -p ~/.config/vscode-copilot-telegram
+# 3. Add bot token and user id to env file
+printf 'TELEGRAM_BOT_TOKEN=123456789:AA...\nTELEGRAM_USER_ID=123456789\n' > ~/.config/vscode-copilot-telegram/.env
+chmod 600 ~/.config/vscode-copilot-telegram/.env
 
-## 2. Create the Telegram bot
+# 4. Test
+.venv/bin/vscode-copilot-telegram --test --workspace PROJECT
+```
 
-1. In Telegram, open a chat with **@BotFather** (blue check mark).
-2. Send `/newbot`. Give it a display name (e.g. `Copilot – your-project`) and a username ending in `bot` (e.g. `yourname_copilot_bot`).
-3. BotFather replies with a token like `123456789:AAH...`. **Copy it and treat it like a password.** Anyone with it can send messages as your bot.
-4. Open the chat with your new bot (BotFather links it) and tap **Start**. A bot can't message you until you've done this.
+Then:
 
-> Use **one bot per VS Code window** that runs the MCP server. Telegram only lets one process poll a bot for replies, so two windows sharing a bot steal each other's button taps. The watcher only sends, so it can share the bot of the window it mirrors.
+1. Copy the example and put your paths in it (`command` and `--workspace`):
 
-✅ Check: you have a token, and your bot's chat shows that you pressed Start.
+   ```bash
+   cp TOOL_DIR/examples/mcp.example.json PROJECT/.mcp.json
+   ```
 
-## 3. Get your Telegram user id
+   Details in [step 6](#6-add-the-server-to-project).
+2. Add the two settings from [step 7](#7-turn-off-the-built-in-terminal) to your VS Code user settings.
+3. Run **Chat: Manage Tool Approval** and pre-approve the `vscode-copilot-telegram` tools.
+4. Copy the instructions for Copilot (if the file already exists, add the text at the end instead):
 
-1. Open a chat with **@userinfobot** and send it any message.
-2. It replies with your numeric **Id** (e.g. `123456789`). That number is `TELEGRAM_USER_ID`.
+   ```bash
+   mkdir -p PROJECT/.github
+   cp TOOL_DIR/examples/copilot-instructions.md PROJECT/.github/copilot-instructions.md
+   ```
+5. In Copilot Chat (agent mode) ask: `Use run_command to run git status`. Approve it on your phone.
 
-It's a number, not your @username. vscode-copilot-telegram ignores every message and button tap from anyone whose id doesn't match.
+## What you need
 
-## 4. Clone and install
+- Python 3.11 or newer.
+  - Windows: `winget install Python.Python.3.12`. Check with `py -3 --version`.
+  - macOS: `brew install python@3.12`. Check with `python3 --version`.
+- VS Code with the GitHub Copilot and GitHub Copilot Chat extensions, and agent mode.
+- Telegram on your phone.
+- A connection from your computer to `api.telegram.org`. If you use VS Code Remote (SSH or Tunnels), install the tool on the remote machine.
 
-Install vscode-copilot-telegram once, in its own folder with its own virtual environment. You don't install it into each project.
+## 1. Create the bot
 
-**Windows (PowerShell):**
+1. In Telegram, open a chat with @BotFather.
+2. Send `/newbot`. Choose a name, and a username that ends in `bot`.
+3. BotFather sends you a token, like `123456789:AAH...`. Copy it. It is a password. Do not share it.
+4. Open your new bot and tap Start. A bot cannot write to you before you do this.
+
+Use one bot for each VS Code window. Telegram lets only one program read the answers of a bot. If two windows use the same bot, they take the taps from each other.
+
+You are done when you have the token and you pressed Start.
+
+## 2. Get your user id
+
+1. Open a chat with @userinfobot and send any message.
+2. It answers with your `Id`, a number like `123456789`.
+
+Use the number, not your @username. The tool ignores every message and tap that does not come from this id.
+
+## 3. Install
+
+Open a terminal in the folder where you want to download the tool (not inside `PROJECT`).
+
+Windows (PowerShell):
 
 ```powershell
-mkdir $HOME\tools -Force | Out-Null
-cd $HOME\tools
 git clone https://github.com/weslylaboy/vscode-copilot-telegram.git
 cd vscode-copilot-telegram
 py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
 pip install -e .
 ```
 
-If `Activate.ps1` is blocked ("running scripts is disabled"), run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, or skip activation and call `.\.venv\Scripts\pip.exe install -e .` directly.
+If PowerShell says "running scripts is disabled", run this once, then activate again:
 
-**macOS (zsh):**
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+macOS:
 
 ```bash
-mkdir -p ~/tools && cd ~/tools
 git clone https://github.com/weslylaboy/vscode-copilot-telegram.git
 cd vscode-copilot-telegram
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
 pip install -e .
 ```
 
-`pip install -e .` creates two commands inside the venv. Note their full paths; you'll paste them into VS Code config later. `TOOL_DIR` is a placeholder: replace it with the real folder you cloned into (for example `/Users/YOU/Projects/vscode-copilot-telegram`). On macOS there is no `.exe`:
+You are now inside `TOOL_DIR`. Run `pwd` (Windows: `(Get-Location).Path`) and keep this path. You need it in the next steps.
 
-| Command | Windows path | macOS path |
+The install creates two commands inside the `.venv` folder:
+
+| Program | Windows | macOS |
 | --- | --- | --- |
-| MCP server | `TOOL_DIR\.venv\Scripts\vscode-copilot-telegram.exe` | `TOOL_DIR/.venv/bin/vscode-copilot-telegram` |
-| Chat mirror | `TOOL_DIR\.venv\Scripts\vscode-copilot-telegram-watch.exe` | `TOOL_DIR/.venv/bin/vscode-copilot-telegram-watch` |
+| Server | `TOOL_DIR\.venv\Scripts\vscode-copilot-telegram.exe` | `TOOL_DIR/.venv/bin/vscode-copilot-telegram` |
+| Watcher | `TOOL_DIR\.venv\Scripts\vscode-copilot-telegram-watch.exe` | `TOOL_DIR/.venv/bin/vscode-copilot-telegram-watch` |
 
-✅ Check: `vscode-copilot-telegram --help` and `vscode-copilot-telegram-watch --help` print usage text.
-
-## 5. Save the token and user id
-
-Both programs read credentials from environment variables, and load `.env` files without overriding variables that are already set. They look in this order (the first file that sets a variable wins):
-
-1. The file named by `VSCODE_COPILOT_TELEGRAM_ENV_FILE`, if set
-2. `~/.config/vscode-copilot-telegram/.env` (Windows: `C:\Users\YOU\.config\vscode-copilot-telegram\.env`)
-
-**Use the second one.** It lives outside every repository, works for all your projects, and both programs find it.
-
-A `.env` inside your project is **never read**, on purpose: Copilot can edit files in the project without approval, so that file must not be able to change who approves commands. If the project `.env` has these settings, both programs write a warning in their log and ignore them.
-
-**Windows (PowerShell):**
-
-```powershell
-New-Item -ItemType Directory -Force "$HOME\.config\vscode-copilot-telegram" | Out-Null
-@"
-TELEGRAM_BOT_TOKEN=123456789:AAH-your-token
-TELEGRAM_USER_ID=123456789
-"@ | Set-Content -Encoding ascii "$HOME\.config\vscode-copilot-telegram\.env"
-```
-
-Use `-Encoding ascii` (or save from an editor as UTF-8 **without** BOM). Windows PowerShell 5's `-Encoding utf8` adds a byte-order mark that breaks the first variable name.
-
-**macOS:**
+Check it:
 
 ```bash
-mkdir -p ~/.config/vscode-copilot-telegram
-cat > ~/.config/vscode-copilot-telegram/.env <<'ENV'
-TELEGRAM_BOT_TOKEN=123456789:AAH-your-token
-TELEGRAM_USER_ID=123456789
-ENV
-chmod 600 ~/.config/vscode-copilot-telegram/.env
+vscode-copilot-telegram --help
 ```
 
-A template is in [`.env.example`](../.env.example) (it documents every variable, the optional ones commented out) and a short one in [`examples/env.example`](../examples/env.example). Other ways to supply the credentials are in [CONFIGURATION.md](CONFIGURATION.md#ways-to-supply-the-token).
+You should see the usage text.
 
-## 6. Test Telegram
+## 4. Save the token and the user id
+
+1. Create this folder:
+
+   macOS: `mkdir -p ~/.config/vscode-copilot-telegram`
+
+   Windows (PowerShell): `mkdir $HOME\.config\vscode-copilot-telegram`
+
+2. In that folder, create a file named `.env` with this content. Put your own token and user id.
+
+   ```
+   TELEGRAM_BOT_TOKEN=123456789:AAH-your-token
+   TELEGRAM_USER_ID=123456789
+   ```
+
+   File path:
+
+   - macOS: `~/.config/vscode-copilot-telegram/.env`
+   - Windows: `$HOME\.config\vscode-copilot-telegram\.env`
+
+   Use any text editor. With VS Code you can run `code ~/.config/vscode-copilot-telegram/.env` (Windows: `code $HOME\.config\vscode-copilot-telegram\.env`). The file name is `.env`, with no `.txt` at the end.
+
+3. macOS only: make the file private.
+
+   ```bash
+   chmod 600 ~/.config/vscode-copilot-telegram/.env
+   ```
+
+Why this place: it is outside every project, and both programs find it.
+
+A `.env` inside your project is never read. Copilot can edit project files without asking, so that file must not decide who approves commands.
+
+More options are in [CONFIGURATION.md](CONFIGURATION.md#environment-variables). A template is in [.env.example](../.env.example).
+
+## 5. Test Telegram
+
+Windows:
 
 ```powershell
-# Windows
-& "$HOME\tools\vscode-copilot-telegram\.venv\Scripts\vscode-copilot-telegram.exe" --test --workspace "C:\Users\YOU\code\your-project"
+& "TOOL_DIR\.venv\Scripts\vscode-copilot-telegram.exe" --test --workspace "PROJECT"
 ```
+
+macOS:
 
 ```bash
-# macOS
-~/tools/vscode-copilot-telegram/.venv/bin/vscode-copilot-telegram --test --workspace ~/code/your-project
+TOOL_DIR/.venv/bin/vscode-copilot-telegram --test --workspace PROJECT
 ```
 
-✅ Check: the command prints `sent`, and your bot sends **"[your-project] 📣 ✅ vscode-copilot-telegram test message. Telegram is set up correctly."**
+It prints `sent`, and your bot sends a message that ends with `✅ vscode-copilot-telegram test message. Telegram is set up correctly.`
 
-If it prints `vscode-copilot-telegram: TELEGRAM_BOT_TOKEN is not set` (or `TELEGRAM_USER_ID`), the `.env` file wasn't found or is malformed. If it prints `error: could not send to Telegram (...)`, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#no-telegram-messages-at-all).
+If it fails, see [Troubleshooting](TROUBLESHOOTING.md#no-telegram-messages). The test does not start the server, so you can run it while VS Code is open.
 
-`--test` doesn't start the MCP server and doesn't poll, so it's safe to run while VS Code is open.
+## 6. Add the server to PROJECT
 
-## 7. Copilot harness and the built-in terminal
+Create `PROJECT/.mcp.json`, in the root of your project (not in `.vscode/`).
 
-This project supports the **Copilot harness** only (the default agent runtime in VS Code). It reads its MCP config from `PROJECT/.mcp.json` at the workspace root (`"mcpServers"` format). VS Code has deprecated the older **Local** harness and will remove it by February 2027, and this project's setup has not been verified against it, so it is not supported or documented.
+### Copy the example file
 
-In the Copilot harness you often can't untick **Run in Terminal**: some builds hide the built-in tools from the tool picker. The approval gate then relies on the settings below instead.
+macOS:
 
-Add these to your VS Code **User** settings (Command Palette → **Preferences: Open User Settings (JSON)**):
-
-```jsonc
-{
-  // The built-in terminal tool always asks in VS Code and can never be auto-approved.
-  "chat.tools.eligibleForAutoApproval": { "runInTerminal": false },
-  // Don't silently auto-run "safe" commands through the built-in terminal either.
-  "chat.tools.terminal.enableAutoApprove": false
-}
+```bash
+cp TOOL_DIR/examples/mcp.example.json PROJECT/.mcp.json
 ```
 
-Then the built-in terminal can't run anything without a click **in VS Code**. Your instructions file (step 10) tells Copilot to use `run_command` instead, so the normal path still goes to Telegram. If a VS Code terminal prompt shows up anyway, click **Skip/Deny** and tell Copilot "use run_command". Also keep the session's permission level on **Manual permissions** (`chat.permissions.default` = `default`); **Allow all** and **Autopilot** skip confirmations for built-in tools.
+Windows (PowerShell):
 
-This fallback means commands never run unapproved, but approvals that slip through the built-in tool happen at the desk, not on the phone. The roadmap item that closes this gap (a `preToolUse` hook) is in [DEVELOPMENT.md](DEVELOPMENT.md#roadmap).
+```powershell
+Copy-Item "TOOL_DIR\examples\mcp.example.json" "PROJECT\.mcp.json"
+```
 
-## 8. Register the MCP server in your project
+### Put your paths in it
 
-Use the **full path** to the `vscode-copilot-telegram` executable from step 4. Don't rely on `PATH`; VS Code may not see your venv.
+Open `.mcp.json` and replace the word `TOOL_DIR` and the word `PROJECT` with your full paths. They appear in `command` and in `--workspace`. On Windows, use the second block and write each `\` twice (`\\`), because it is JSON.
 
-### `PROJECT/.mcp.json`
-
-Copy [`examples/dot-mcp.json`](../examples/dot-mcp.json) to `PROJECT/.mcp.json` (the root of the project, not `.vscode/`) and replace the `command` path with your real one (`/Users/YOU/...` is a placeholder; confirm the file exists with `ls`; there is no `.exe` on macOS). This format has no working-directory field, so pass the project path explicitly with `--workspace`:
+macOS:
 
 ```json
 {
   "mcpServers": {
     "vscode-copilot-telegram": {
       "type": "stdio",
-      "command": "/Users/YOU/tools/vscode-copilot-telegram/.venv/bin/vscode-copilot-telegram",
-      "args": ["--workspace", "/Users/YOU/code/your-project"],
+      "command": "TOOL_DIR/.venv/bin/vscode-copilot-telegram",
+      "args": ["--workspace", "PROJECT"],
       "tools": ["*"]
     }
   }
 }
 ```
 
-On Windows use `"command": "C:\\Users\\YOU\\tools\\vscode-copilot-telegram\\.venv\\Scripts\\vscode-copilot-telegram.exe"` and `"args": ["--workspace", "C:\\Users\\YOU\\code\\your-project"]`.
+Windows:
 
-The `--workspace` folder is the jail: `run_command` refuses any `cwd` outside it, and the audit log goes to `~/.vscode-copilot-telegram/audit-<project>-<hash>.jsonl`, outside the project. If you leave `--workspace` out, the server uses `$WORKSPACE_ROOT`, then its current directory.
+```json
+{
+  "mcpServers": {
+    "vscode-copilot-telegram": {
+      "type": "stdio",
+      "command": "TOOL_DIR\\.venv\\Scripts\\vscode-copilot-telegram.exe",
+      "args": ["--workspace", "PROJECT"],
+      "tools": ["*"]
+    }
+  }
+}
+```
 
-The file contains only paths, no secrets, so you can commit it if your team uses the same layout. The server reads your token from `~/.config/vscode-copilot-telegram/.env` on its own. Add `.vscode-copilot-telegram/` to the project's `.gitignore`.
+Rules:
 
-### Start it
+- Use full paths. Do not use `~`, and do not rely on `PATH`. Check that the `command` file exists.
+- `--workspace` is `PROJECT`, the folder where Copilot works. It is the jail: `run_command` refuses any folder outside of it.
+- The file has no secrets, only paths.
+- Add `.vscode-copilot-telegram/` to the `.gitignore` of your project.
+- Only the Copilot harness (the default agent runtime of VS Code) is supported. It reads `.mcp.json`. The old Local harness is not supported.
 
-Open `PROJECT/.mcp.json` in VS Code and click the **Start** code lens above `"vscode-copilot-telegram"` (or run **MCP: List Servers** → vscode-copilot-telegram → **Start Server**). Then **MCP: List Servers** → vscode-copilot-telegram → **Show Output** should show a line like `workspace /…/your-project, audit log /Users/YOU/.vscode-copilot-telegram/audit-your-project-<hash>.jsonl`.
+Start the server: open `.mcp.json` and click Start above `"vscode-copilot-telegram"`. You can also run **MCP: List Servers**, choose the server, and choose **Start Server**.
 
-If VS Code's terminal sandbox is on and the server fails with `PermissionError: ... pyvenv.cfg` ("MCP server failed to initialize inside the sandbox"), the sandbox is blocking the venv, the Telegram network access, and the audit log folder. Set `chat.agent.sandbox.mcpServers` to `false` in your User settings (the terminal tool stays sandboxed), then restart the server.
+Check it: **MCP: List Servers**, then the server, then **Show Output**. You should see a line that starts with `workspace`, and the status is Running with 3 tools: `run_command`, `ask_user`, `notify`.
 
-If the output says `configuration error: …`, the server still starts, but every tool refuses to run commands (fail closed). Fix the error and restart the server.
+If the output says `configuration error`, the server starts but refuses all commands. Fix the error and restart it.
 
-✅ Check: the server status is **Running** and lists 3 tools: `ask_user`, `run_command`, `notify`.
+If you see `MCP server failed to initialize inside the sandbox` or `PermissionError: ... pyvenv.cfg`, the VS Code sandbox is on and it blocks the server. The server needs to read its `.venv` and to run the commands you approve, so it must run outside the sandbox. Add this to your user settings (Command Palette, **Preferences: Open User Settings (JSON)**) and start the server again:
 
-## 9. Block the built-in terminal and auto-approve the vscode-copilot-telegram tools
+```jsonc
+{
+  "chat.agent.sandbox.mcpServers": false
+}
+```
 
-1. Make sure the §7 settings are in your User settings, and keep the session's permission level on **Manual permissions** (not **Allow all** or **Autopilot**).
-2. If your build shows a **Configure Tools** (🔧) button in the chat input, also **untick "Run in Terminal"** (and **Run Task** / **Create and Run Task** if present) and tick the `vscode-copilot-telegram` server and its three tools. Many Copilot harness builds don't show this button; the §7 settings then do the job.
-3. Run **Chat: Manage Tool Approval** from the Command Palette. Under **vscode-copilot-telegram**, tick the top-level box for **pre-approval ("without approval")**. You don't need post-approval.
-   Alternatively, the first time Copilot calls one of these tools, choose **Always Allow** in the confirmation dropdown.
+The terminal of Copilot stays sandboxed. Only locally started MCP servers leave the sandbox ([VS Code docs](https://code.visualstudio.com/docs/agents/run/agent-sandboxing)).
 
-Why step 3: otherwise every `run_command` asks twice, once in VS Code and once in Telegram. Telegram is the real gate; VS Code's prompt adds nothing. Pre-approving `run_command` is safe because the tool itself waits for your Telegram tap.
+## 7. Turn off the built-in terminal
 
-✅ Check: the §7 settings are saved, the permission level is **Manual permissions**, and the vscode-copilot-telegram tools are pre-approved.
+VS Code does not let other programs answer the confirmations of Copilot. So the gate works only if Copilot cannot use its own terminal tool without you.
 
-### Ask for a click before Copilot edits the files that control the gate
+Open your user settings as JSON (Command Palette, **Preferences: Open User Settings (JSON)**) and add:
 
-Copilot can edit files in the project without approval, including `.mcp.json` (which decides what program VS Code starts as the server) and `vscode-copilot-telegram.toml`. VS Code gives MCP servers in `.mcp.json` the same trust as the workspace, so it doesn't ask again when their `command` changes. Add this to your VS Code **User** settings (Command Palette → **Preferences: Open User Settings (JSON)**), so edits to these files wait for your click:
+```jsonc
+{
+  "chat.tools.eligibleForAutoApproval": { "runInTerminal": false },
+  "chat.tools.terminal.enableAutoApprove": false
+}
+```
+
+This makes the built-in terminal always ask you inside VS Code. Also keep the permission level of the chat on Manual permissions. Allow all and Autopilot skip the confirmations.
+
+If your VS Code shows the Configure Tools button in the chat, also untick Run in Terminal there (and Run Task, if you see it). This may not be available in Copilot harness. The settings above are enough.
+
+If a VS Code prompt for the terminal appears anyway, click Deny and write: `use run_command`.
+
+A command that goes through the built-in terminal is not on Telegram. You approve it at the computer.
+
+### Optional: ask before Copilot edits the files of the gate
+
+Copilot can edit `.mcp.json` and `vscode-copilot-telegram.toml` without asking. To get a click before it edits them, add this to the same user settings file:
 
 ```jsonc
 {
@@ -234,11 +288,20 @@ Copilot can edit files in the project without approval, including `.mcp.json` (w
 }
 ```
 
-More in [SECURITY.md](../SECURITY.md#accepting-the-allow-list).
+More in [SECURITY.md](../SECURITY.md#files-in-the-project-that-can-change-the-gate).
 
-## 10. Tell Copilot to use the tools
+## 8. Pre-approve the tools
 
-Create or edit `PROJECT/.github/copilot-instructions.md` and paste the contents of [`examples/copilot-instructions.md`](../examples/copilot-instructions.md):
+Without this, every `run_command` asks twice: in VS Code and in Telegram. Telegram is the real gate. It is safe to pre-approve because the tool waits for your tap.
+
+1. Run **Chat: Manage Tool Approval** from the Command Palette.
+2. Under `vscode-copilot-telegram`, tick the box for pre-approval ("without approval").
+
+You can also choose Always Allow the first time Copilot calls one of the tools.
+
+## 9. Tell Copilot to use the tools
+
+Copy [examples/copilot-instructions.md](../examples/copilot-instructions.md) to `PROJECT/.github/copilot-instructions.md`. If the file exists, add the text at the end.
 
 ```markdown
 ## Running commands and asking questions (vscode-copilot-telegram)
@@ -250,169 +313,49 @@ Create or edit `PROJECT/.github/copilot-instructions.md` and paste the contents 
 - Never put secrets, tokens, or .env contents in a command, question, or notification.
 ```
 
-The server also sends short usage instructions to Copilot when it connects, but the instructions file is what Copilot reliably follows. Check that **GitHub › Copilot › Chat › Code Generation: Use Instruction Files** (`github.copilot.chat.codeGeneration.useInstructionFiles`) is on (the default).
+Check that the setting `github.copilot.chat.codeGeneration.useInstructionFiles` is on. It is on by default.
 
-## 11. Run the chat mirror and keep it running
+## 10. Try it
 
-The watcher forwards your prompts and Copilot's replies. It's optional: approvals and questions work without it.
+Open a new chat in agent mode, in `PROJECT`.
 
-### Find the session files first
+Approve:
 
-Open `PROJECT` in VS Code and send at least one chat message, then:
+1. Write: `Use run_command to run git status`.
+2. In Telegram you get a message with the command, the reason, the folder, and three buttons.
+3. Tap Approve. The message changes to show the exit code and the output. Copilot shows the result.
 
-```powershell
-# Windows
-& "$HOME\tools\vscode-copilot-telegram\.venv\Scripts\vscode-copilot-telegram-watch.exe" --workspace "C:\Users\YOU\code\your-project" --list
-```
+Deny:
 
-```bash
-# macOS
-~/tools/vscode-copilot-telegram/.venv/bin/vscode-copilot-telegram-watch --workspace ~/code/your-project --list
-```
+1. Write: `Use run_command to run echo hello > denied.txt`.
+2. Tap Deny.
+3. Copilot says the command was denied, and `denied.txt` does not exist.
 
-✅ Check: it prints `storage: …/workspaceStorage/<hash>` and at least one session file with a message count. If not, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#the-watcher-finds-no-sessions).
+Block list:
 
-To preview what would be sent, without a token: add `--dry-run --backfill 5` (Ctrl+C to stop).
+1. Write: `Use run_command to run git push --force`.
+2. You get a Blocked message without buttons. Nothing runs.
 
-### Run it in a terminal
+If something does not work, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md). The full list of checks is in [DEVELOPMENT.md](DEVELOPMENT.md#manual-checklist).
 
-```bash
-vscode-copilot-telegram-watch --workspace ~/code/your-project        # use the full path as above
-```
+## Next
 
-On first start it treats existing history as already sent, then forwards everything new. Use `--backfill N` to also send the last N messages of existing sessions, and `--no-tools` to leave out tool and file-edit lines. All flags are in [CONFIGURATION.md](CONFIGURATION.md#vscode-copilot-telegram-watch-flags).
+- [Chat mirror](WATCHER.md): see your Copilot chat in Telegram.
+- [Configuration](CONFIGURATION.md): timeouts, allow list, block list, shell.
 
-Run one watcher per project. It keeps its "already sent" state in `~/.vscode-copilot-telegram/watch-<project>-<hash>.json`, so restarts don't send duplicates.
-
-### Keep it running on Windows (Task Scheduler)
-
-This starts the watcher at logon, without a console window, and restarts it if it crashes. Run in PowerShell (no admin needed):
-
-```powershell
-$venv    = "$HOME\tools\vscode-copilot-telegram\.venv"
-$project = "C:\Users\YOU\code\your-project"
-$name    = "vscode-copilot-telegram-watch (your-project)"
-
-$action   = New-ScheduledTaskAction -Execute "$venv\Scripts\pythonw.exe" `
-              -Argument "-m vscode_copilot_telegram.watcher --workspace `"$project`"" `
-              -WorkingDirectory $project
-$trigger  = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
-$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) `
-              -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
-              -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew
-Register-ScheduledTask -TaskName $name -Action $action -Trigger $trigger -Settings $settings `
-  -Description "Mirror Copilot chat for $project to Telegram"
-Start-ScheduledTask -TaskName $name
-```
-
-`pythonw.exe -m vscode_copilot_telegram.watcher` is the same program as `vscode-copilot-telegram-watch.exe`, minus the console window (so it also has no visible log; test it in a terminal first). Manage it with `Get-ScheduledTask -TaskName $name`, `Stop-ScheduledTask`, and `Unregister-ScheduledTask -TaskName $name -Confirm:$false`.
-
-### Keep it running on macOS (launchd)
-
-Create `~/Library/LaunchAgents/com.vscode-copilot-telegram.watch.your-project.plist` (replace `YOU` and the paths; launchd doesn't expand `~`):
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>com.vscode-copilot-telegram.watch.your-project</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/Users/YOU/tools/vscode-copilot-telegram/.venv/bin/vscode-copilot-telegram-watch</string>
-    <string>--workspace</string>
-    <string>/Users/YOU/code/your-project</string>
-  </array>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>KeepAlive</key>
-  <true/>
-  <key>ThrottleInterval</key>
-  <integer>30</integer>
-  <key>StandardOutPath</key>
-  <string>/Users/YOU/Library/Logs/vscode-copilot-telegram-watch.log</string>
-  <key>StandardErrorPath</key>
-  <string>/Users/YOU/Library/Logs/vscode-copilot-telegram-watch.log</string>
-</dict>
-</plist>
-```
-
-Load, check, and stop it:
+## Update
 
 ```bash
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.vscode-copilot-telegram.watch.your-project.plist
-launchctl print gui/$(id -u)/com.vscode-copilot-telegram.watch.your-project | grep state
-tail -f ~/Library/Logs/vscode-copilot-telegram-watch.log
-launchctl bootout gui/$(id -u)/com.vscode-copilot-telegram.watch.your-project      # stop and unload
+cd TOOL_DIR
+git pull
+pip install -e .
 ```
 
-If the file named by `VSCODE_COPILOT_TELEGRAM_ENV_FILE` is under `~/Documents`, `~/Desktop`, or `~/Downloads`, macOS privacy protection may block a background agent from reading it. Keep the credentials in `~/.config/vscode-copilot-telegram/` (step 5), which isn't protected.
+Run it with the venv active. Then restart the server (**MCP: List Servers**, then **Restart**) and the watcher.
 
-### Keep it running on Linux (systemd)
+## Uninstall
 
-This starts the watcher when you log in and restarts it if it stops. It is a user service, so you don't need `sudo`.
-
-Create `~/.config/systemd/user/vscode-copilot-telegram-watch-your-project.service` (replace the paths; `%h` is your home folder, systemd fills it in):
-
-```ini
-[Unit]
-Description=Mirror Copilot chat for your-project to Telegram
-
-[Service]
-ExecStart=%h/tools/vscode-copilot-telegram/.venv/bin/vscode-copilot-telegram-watch --workspace %h/code/your-project
-Restart=always
-RestartSec=30
-
-[Install]
-WantedBy=default.target
-```
-
-If a path has spaces, put that argument in double quotes.
-
-Load, check, and stop it:
-
-```bash
-systemctl --user daemon-reload
-systemctl --user enable --now vscode-copilot-telegram-watch-your-project.service
-systemctl --user status vscode-copilot-telegram-watch-your-project.service
-journalctl --user -u vscode-copilot-telegram-watch-your-project.service -f               # log
-systemctl --user disable --now vscode-copilot-telegram-watch-your-project.service        # stop and remove from startup
-```
-
-A user service only runs while you are logged in. On a machine you reach over SSH or a tunnel, run `loginctl enable-linger "$USER"` once so the watcher starts at boot and keeps running after you log out.
-
-## 12. End-to-end verification checklist
-
-Do these in order in a fresh **Agent** chat in `PROJECT`. Each should pass before you rely on the setup.
-
-- [ ] **Telegram works:** `vscode-copilot-telegram --test --workspace PROJECT` prints `sent` and the ✅ message arrives (§6).
-- [ ] **Server running:** **MCP: List Servers** shows vscode-copilot-telegram **Running** with 3 tools (§8).
-- [ ] **Built-in terminal blocked:** the §7 settings are saved and the permission level is **Manual permissions**.
-- [ ] **Approve path:** ask Copilot *"Use run_command to run `git status`"*. A **🖥 Run command?** message arrives with the command, *Why*, *cwd*, and *id*. Tap **✅ Approve**. The message changes to show the exit code and output, and Copilot reports the result.
-- [ ] **Deny path:** ask Copilot to run `echo should-not-run > denied.txt` and tap **❌ Deny**. Copilot reports it was denied, and `denied.txt` does **not** exist.
-- [ ] **Deny with note:** ask for another command, tap **📝 Deny with note**, and reply with a note. Copilot receives your note.
-- [ ] **Timeout fails closed:** ask Copilot *"Use run_command with timeout_s 30 to run `echo late`"* and don't tap anything. After 30 s the message shows **⏱ Timed out → denied**. Tapping Approve afterwards says *Already answered* and nothing runs.
-- [ ] **Single-use buttons:** approve a request, then tap Approve again on the same message (if the buttons are still visible in your client). It says *Already answered*.
-- [ ] **Block list:** ask Copilot to run `git push --force`. You get a **⛔ Blocked command** notice with no buttons, and nothing runs.
-- [ ] **Workspace jail:** ask Copilot to run `ls` with `cwd` `..`. It's rejected without asking you.
-- [ ] **Question:** ask Copilot *"Use ask_user to ask me which database to use, with options Postgres and SQLite"*. Tap one; Copilot gets your choice. Repeat and type a free-text answer instead.
-- [ ] **Only you:** while a request is waiting, send a text message to your bot from another Telegram account. Nothing happens, and the server output (MCP: List Servers → Show Output) shows `ignored message from unauthorized user …`.
-- [ ] **Chat mirror:** with the watcher running, send Copilot a prompt. Within a few seconds you get **🧑 You:** and then **🤖 Copilot:** messages.
-- [ ] **Audit log:** `~/.vscode-copilot-telegram/audit-<project>-<hash>.jsonl` (the path is in the server output, step 8) has one line per request with `decision` values like `approved`, `denied`, `denied-timeout`, `blocked`, `rejected`.
-- [ ] **Allow list needs your acceptance:** add `allow = ['git status']` to `PROJECT/vscode-copilot-telegram.toml` and restart the server (MCP: List Servers → Restart). The server output has a warning that the allow list is not accepted. Ask Copilot to run `git status`: Telegram asks, and the message says the allow list is not accepted. Run `vscode-copilot-telegram --accept-policy --workspace PROJECT` in a normal terminal **and** in the VS Code terminal, read the patterns, and type `accept`. Restart the server and ask again: now `git status` shows **✅ Auto-approved** with no buttons. Add a second pattern to the file, restart, and check that it asks again.
-- [ ] **The accept command refuses scripts:** `echo accept | vscode-copilot-telegram --accept-policy --workspace PROJECT` prints `must be run by you` and saves nothing.
-- [ ] **Restart safety:** restart the MCP server (MCP: List Servers → Restart). Tap a button on an old request; it says *Already answered* or *expired*, and nothing runs twice.
-- [ ] **`/pending`:** while a request is waiting, send `/pending` to the bot; it lists the request id.
-
-## 13. Updating and uninstalling
-
-**Update:**
-
-```bash
-cd TOOL_DIR && git pull && pip install -e .     # with the venv activated
-```
-
-Then restart the MCP server in VS Code (MCP: List Servers → Restart) and restart the watcher.
-
-**Uninstall:** remove the server entry from `PROJECT/.mcp.json`, delete the scheduled task, launchd agent, or systemd unit, then delete `TOOL_DIR`, `~/.config/vscode-copilot-telegram/`, `~/.vscode-copilot-telegram/`, and `PROJECT/.vscode-copilot-telegram/`. To invalidate the bot token, send `/revoke` (or `/deletebot`) to @BotFather.
+1. Remove the server from `PROJECT/.mcp.json`.
+2. Stop the watcher and remove its auto-start (see [WATCHER.md](WATCHER.md#keep-it-running)).
+3. Delete `TOOL_DIR`, `~/.config/vscode-copilot-telegram/`, `~/.vscode-copilot-telegram/` and `PROJECT/.vscode-copilot-telegram/`.
+4. In @BotFather, send `/revoke` to cancel the token.

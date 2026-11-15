@@ -1,16 +1,18 @@
 # Development
 
-Everything you need to change vscode-copilot-telegram safely. Read [ARCHITECTURE.md](ARCHITECTURE.md) first for the module map and design decisions.
+How to change this project safely. Read [ARCHITECTURE.md](ARCHITECTURE.md) first.
 
-## Agent instructions
+## Instructions for coding agents
 
-Instruction files for coding agents that work on **this** repository (not for end-user projects that use the tool):
+For agents that work on this repository (not for projects that use the tool):
 
-- [`AGENTS.md`](../AGENTS.md) — canonical guide (architecture, commands, conventions, tests, security invariants).
-- [`.github/copilot-instructions.md`](../.github/copilot-instructions.md) — GitHub Copilot. This is not [`examples/copilot-instructions.md`](../examples/copilot-instructions.md), which is the template end users copy into their own projects so Copilot will call this tool's MCP server.
-- [`CLAUDE.md`](../CLAUDE.md) — Claude Code; imports `AGENTS.md`.
+- [AGENTS.md](../AGENTS.md): the main guide.
+- [.github/copilot-instructions.md](../.github/copilot-instructions.md): for GitHub Copilot. It is not [examples/copilot-instructions.md](../examples/copilot-instructions.md). That file is the template that users copy into their own projects.
+- [CLAUDE.md](../CLAUDE.md): for Claude Code. It imports `AGENTS.md`.
 
-## Set up a dev environment
+Writing docs? Follow [STYLE.md](STYLE.md).
+
+## Dev environment
 
 ```bash
 git clone https://github.com/weslylaboy/vscode-copilot-telegram.git
@@ -19,106 +21,136 @@ python3 -m venv .venv && source .venv/bin/activate     # Windows: py -3 -m venv 
 pip install -e ".[dev]"
 ```
 
-Python 3.11 is the minimum (`tomllib`, `Path.is_relative_to`, modern typing). CI runs 3.11 and 3.12; it was also run locally on 3.13.
+Python 3.11 is the minimum (`tomllib`, `Path.is_relative_to`, modern typing). CI runs 3.11 and 3.12.
 
 ## Run the tests
 
 ```bash
-pytest -q                          # whole suite (144 tests, ~15 s)
-pytest -q tests/test_bridge.py     # one module
+pytest -q                          # all tests (146, about 7 s)
+pytest -q tests/test_bridge.py     # one file
 pytest -q -k timeout               # by name
 mypy                               # type check of src/
 ```
 
-pytest options live in `pyproject.toml` under `[tool.pytest.ini_options]` (`asyncio_mode = "auto"`).
+The pytest options are in `pyproject.toml` (`asyncio_mode = "auto"`).
 
-| File | Covers |
+| File | What it tests |
 | --- | --- |
-| `tests/test_bridge.py` | Approve once and ignore second taps, answered ids surviving a restart, deny, deny with note, timeout fails closed, Telegram send failure fails closed, a failed button answer is logged and the decision still counts, unauthorized users ignored, several pending at once, block list, allow list notice, cwd jail, masking in Telegram, audit log, `ask_user` options / text / timeout / reply routing, `notify` |
-| `tests/test_policy.py` | Built-in block list (including the accept command and the accepted file), allow list full-match, chaining never auto-approved |
+| `tests/test_bridge.py` | Approve once and ignore a second tap, answered ids after a restart, deny, deny with note, timeout, Telegram send failure (all fail closed), unauthorized users, several requests at once, block list, allow list notice, cwd jail, masking, audit log, `ask_user` (options, text, timeout, reply routing), `notify` |
+| `tests/test_policy.py` | Built-in block list (with the accept command and the accepted file), allow list full match, chaining is never auto-approved |
 | `tests/test_masking.py` | Each masking pattern |
-| `tests/test_runner.py` | Combined output capture, run timeout kills, the Windows kill calls `taskkill` by full path, token stripped from the child environment, head-and-tail truncation |
-| `tests/test_workspace.py` | cwd resolution, `..` / absolute / sibling-prefix / symlink escapes, missing folders |
-| `tests/test_config.py` | The project `.env` is never loaded (credentials, API address, audit log path), the names it would have set are reported, the `.env` load order outside the project, the audit log default (outside the project, a leftover `log_path` in the TOML is ignored with a warning that names an older log file, the server still starts, `LOG_PATH` still works), and the allow list: ignored until accepted, ignored again when the file changes, accepted per workspace, refused when a pattern approves everything, warnings for risky patterns, the example allow list staying narrow, an accepted copy inside the workspace not trusted, and `--accept-policy` refusing as a script, and working in a real terminal (pseudo-terminal, not on Windows) |
-| `tests/test_sessions.py` | The three chat formats (fixtures in `tests/fixtures/`), op-log replay, file URI decoding, workspaceStorage matching, message splitting and formatting, and the watcher: dedupe across restarts, settle time, no history flood, backfill, retry after send failure |
-| `tests/test_mcp_smoke.py` | Starts the real server with `python -m vscode_copilot_telegram` over stdio, lists tools, and checks that calls fail closed with Telegram pointed at a closed local port, and without credentials |
+| `tests/test_runner.py` | Output capture, timeout kill, Windows kill with the full path of `taskkill`, token removed from the environment, truncation |
+| `tests/test_workspace.py` | cwd resolution, escapes with `..`, absolute paths, sibling prefix and symlinks, missing folders |
+| `tests/test_config.py` | The project `.env` is never loaded, the `.env` order, the audit log default and a leftover `log_path`, the allow list (ignored until accepted, ignored again when it changes, per project, refused when too broad, warnings, a copy inside the project not trusted), `--accept-policy` refusing as a script and working in a pseudo-terminal (not on Windows) |
+| `tests/test_sessions.py` | The three chat formats (fixtures in `tests/fixtures/`), replay of the log, file URI decoding, storage matching, message splitting, and the watcher: no duplicates after a restart, settle time, no flood of old history, backfill, retry after a send failure |
+| `tests/test_mcp_smoke.py` | Starts the real server with `python -m vscode_copilot_telegram` over stdio, lists the tools, checks that calls fail closed with Telegram on a closed local port, and without credentials |
 
-`tests/conftest.py` provides `FakeTelegram` (an in-memory stand-in for `TelegramAPI`: records sent and edited messages, lets tests push `callback_query` and `message` updates) and the `make_bridge` fixture.
+`tests/conftest.py` has `FakeTelegram` (an in-memory replacement for `TelegramAPI`) and the `make_bridge` fixture.
 
-No test talks to the real Telegram API or needs a token. `VSCODE_COPILOT_TELEGRAM_API_BASE` lets the smoke test point the server at a dead local port.
+No test uses the real Telegram API or needs a token. `VSCODE_COPILOT_TELEGRAM_API_BASE` points the smoke test to a closed local port.
 
 ## CI
 
-`.github/workflows/ci.yml` (GitHub Actions) runs `pip install -e ".[dev]"` and `pytest -q` on Linux, macOS, and Windows with Python 3.11 and 3.12, and `mypy` once (on Linux), for every branch push and pull request. Results are in the **Actions** tab of the repository. Passing CI on Windows and macOS is not a live test: the real shells, terminals, and auto-start tools are still listed below.
+`.github/workflows/ci.yml` runs `pip install -e ".[dev]"` and `pytest -q` on Linux, macOS and Windows with Python 3.11 and 3.12. It runs `mypy` once, on Linux. It runs on every branch push and pull request. Results are in the Actions tab.
 
-## Manual testing against real Telegram
+## Test with a real Telegram
 
-1. Create a throwaway bot with @BotFather and put its token in `~/.config/vscode-copilot-telegram/.env`.
-2. `vscode-copilot-telegram --test --workspace /tmp/scratch` → you get the ✅ message.
-3. Drive the MCP server without VS Code using the MCP Inspector:
+1. Create a test bot with @BotFather and save its token in `~/.config/vscode-copilot-telegram/.env`.
+2. Run `vscode-copilot-telegram --test --workspace /tmp/scratch`. You get the message.
+3. Run the server without VS Code, with the MCP Inspector:
+
    ```bash
    npx @modelcontextprotocol/inspector .venv/bin/vscode-copilot-telegram --workspace /tmp/scratch
    ```
+
    Call `run_command` with `{"command": "echo hi", "reason": "test"}` and approve on your phone.
-4. Watcher: `vscode-copilot-telegram-watch --workspace <a folder you've chatted in> --dry-run --backfill 3`.
-5. Then run the [end-to-end checklist](SETUP.md#12-end-to-end-verification-checklist) in VS Code.
+4. Watcher: `vscode-copilot-telegram-watch --workspace <a folder with chats> --dry-run --backfill 3`.
+5. Then do the [manual checklist](#manual-checklist) in VS Code.
 
-## What is not tested yet
+## Manual checklist
 
-The automated tests use a fake Telegram and hand-made session fixtures. As of 0.1.0, none of the following has been exercised:
+Do these in order, in a new Agent chat in your project. Each one must pass.
 
-- **Real Telegram Bot API**: actual long polling, `409 Conflict` handling, rate limits (`retry_after`), HTML rendering of messages, `force_reply` for notes, message edits on old messages.
-- **Real VS Code + Copilot**: that Copilot agent mode reliably picks `run_command` once Run in Terminal is off; tool approval interplay; the Copilot harness reading `.mcp.json`; how `${workspaceFolder}` resolves on each OS.
-- **Real chat session files** from current VS Code / Copilot Chat builds on Windows and macOS (the fixtures model the formats described below), including VS Code Server paths for tunnels.
-- **Windows specifics**: `cmd.exe` / PowerShell quoting through `run_command`, `taskkill /T` process-tree kill, Task Scheduler with `pythonw.exe`.
-- **macOS launchd** agent and privacy (TCC) prompts.
-- **`--accept-policy`** typed in a real terminal on Windows and Linux, and in the VS Code terminal. The tests run it as a script on every OS (it must refuse) and in a pseudo-terminal on macOS and Linux; I also ran it by hand on macOS. The Windows terminal and the VS Code terminal need a manual run ([SETUP §12](SETUP.md#12-end-to-end-verification-checklist)).
-- **The edit-approval setting** (`chat.tools.edits.autoApprove`) for the files that control the gate, and whether it covers `.mcp.json`.
-- **Registering the server in the user-level MCP configuration** (outside the project) so a project can't change its `command`: whether `${workspaceFolder}` and `--workspace` work there, and for the Copilot harness.
-- **Linux systemd** user service for the watcher.
+- [ ] Telegram: `vscode-copilot-telegram --test --workspace PROJECT` prints `sent`, and the message arrives.
+- [ ] Server: **MCP: List Servers** shows it Running with 3 tools.
+- [ ] Built-in terminal: the settings from [SETUP.md](SETUP.md#7-turn-off-the-built-in-terminal) are saved, and the permission level is Manual permissions.
+- [ ] Approve: ask `Use run_command to run git status`. A Run command? message arrives with the command, Why, cwd and id. Tap Approve. The message shows the exit code and output, and Copilot reports the result.
+- [ ] Deny: ask for `echo should-not-run > denied.txt` and tap Deny. `denied.txt` does not exist.
+- [ ] Deny with note: ask for another command, tap Deny with note, and write a note. Copilot gets the note.
+- [ ] Timeout: ask `Use run_command with timeout_s 30 to run echo late` and do not tap. After 30 seconds the message shows Timed out, denied. A later Approve says Already answered and nothing runs.
+- [ ] Single-use: approve a request, then tap Approve again on the same message. It says Already answered.
+- [ ] Block list: ask for `git push --force`. You get a Blocked command notice without buttons, and nothing runs.
+- [ ] Jail: ask for `ls` with `cwd` set to `..`. It is rejected without asking you.
+- [ ] Question: ask `Use ask_user to ask me which database to use, with options Postgres and SQLite`. Tap one. Repeat and type a free answer.
+- [ ] Only you: while a request waits, send a message to your bot from another Telegram account. Nothing happens. The server output shows `ignored message from unauthorized user`.
+- [ ] Chat mirror: with the watcher running, send a prompt to Copilot. In a few seconds you get your prompt and the answer.
+- [ ] Audit log: the file has one line for each request, with `decision` values like `approved`, `denied`, `denied-timeout`, `blocked`, `rejected`.
+- [ ] Allow list: add `allow = ['git status']` to the TOML and restart the server. The output warns that it is not accepted. Ask for `git status`: Telegram asks. Run `--accept-policy` in a normal terminal and in the VS Code terminal, and type `accept`. Restart and ask again: it shows Auto-approved without buttons. Add a second pattern, restart, and check that it asks again.
+- [ ] Accept refuses scripts: `echo accept | vscode-copilot-telegram --accept-policy --workspace PROJECT` prints `must be run by you` and saves nothing.
+- [ ] Restart: restart the server. Tap a button on an old request. It says Already answered or expired. Nothing runs twice.
+- [ ] `/pending`: while a request waits, send `/pending` to the bot. It lists the request id.
 
-Treat the first real run as the integration test, and please add regression tests or fixtures for anything that breaks.
+If something breaks in a real run, please add a test or a fixture for it.
 
-## chatSessions format assumptions
+## Chat file formats
 
-These are undocumented VS Code internals, so `sessions.py` parses defensively: unknown kinds and missing fields are skipped, never fatal.
+These are internals of VS Code that are not documented. `sessions.py` reads them with care: unknown kinds and missing fields are skipped.
 
-**Locating a project's storage.** Each `…/User/workspaceStorage/<hash>/workspace.json` has `"folder": "<uri>"` (`file:///…`, `vscode-remote://…`, `vscode-vfs://…`). The URI is decoded (`%3A` → `:`, drive letters lower-cased, UNC kept), compared after resolving symlinks, case-insensitively on Windows and macOS. Multi-root workspaces (`"workspace": …`) aren't matched; use `--storage`.
+Finding the storage of a project: each `.../User/workspaceStorage/<hash>/workspace.json` has `"folder": "<uri>"` (`file:///...`, `vscode-remote://...`, `vscode-vfs://...`). The URI is decoded (`%3A` becomes `:`, drive letters in lower case, UNC kept) and compared after resolving symlinks, without case on Windows and macOS. Multi-root workspaces (`"workspace": ...`) are not matched. Use `--storage`.
 
-**Format 1, `chatSessions/<id>.json`:**
-`{"version": 3, "sessionId", "customTitle"?, "requests": [{"requestId", "message": {"text" | "parts": [{"text"}]}, "response": [parts], "result"?, "isComplete"?, "modelState"?}]}`
+Format 1, `chatSessions/<id>.json`:
 
-**Format 2, `chatSessions/<id>.jsonl` (VS Code ≥ 1.109):** one op per line, replayed in order:
-`{"kind": 0, "v": <full session>}` snapshot · `{"kind": 1, "k": [path], "v": value}` set · `{"kind": 2, "k": [path], "v": [items], "i"?: index}` push/splice · `{"kind": 3, "k": [path]}` delete. The replayed object is format 1.
+```
+{"version": 3, "sessionId", "customTitle"?, "requests": [
+  {"requestId", "message": {"text" | "parts": [{"text"}]}, "response": [parts],
+   "result"?, "isComplete"?, "modelState"?}]}
+```
 
-**Response parts used** (`kind`): `markdownContent` / `markdownVuln` / no kind (`content` or `value` text), `inlineReference` (file name), `toolInvocation` / `toolInvocationSerialized` (`pastTenseMessage` / `invocationMessage`, and `toolSpecificData.commandLine` for terminal commands), `textEditGroup` (edited file name), `confirmation` (`title` / `message`). Skipped on purpose: `thinking`, progress, warnings, references, code-block URIs, undo stops, and other UI chrome (`SKIP_KINDS`).
+Format 2, `chatSessions/<id>.jsonl` (VS Code 1.109 and newer). One operation for each line, replayed in order:
 
-**Completion.** A reply is complete when its request has `result`, `isComplete: true`, or a `modelState` with `completedAt` / non-zero `value`, or when it isn't the last request. Incomplete replies are sent once unchanged for `--settle` seconds.
+- `{"kind": 0, "v": <full session>}`: snapshot
+- `{"kind": 1, "k": [path], "v": value}`: set
+- `{"kind": 2, "k": [path], "v": [items], "i"?: index}`: push or splice
+- `{"kind": 3, "k": [path]}`: delete
 
-**Format 3, `GitHub.copilot-chat/transcripts/<id>.jsonl`:** events `{"type", "id"?, "data": {…}}` with `user.message` / `assistant.message` (`content` | `text` | `message`) and `tool.execution_start` (`toolName`, `arguments` with `command` or `filePath` / `path`).
+The result is format 1.
 
-**Dedupe keys.** `<requestId>:u` / `:a` for chat sessions, `<event id>:u` / `:a` / `:t` for transcripts. Changing these keys makes every watcher resend history, so don't.
+Response parts that are used (`kind`):
 
-When a format changes: copy a small, **scrubbed** sample into `tests/fixtures/`, add a test in `tests/test_sessions.py`, then fix the parser.
+- `markdownContent`, `markdownVuln`, or no kind: text in `content` or `value`
+- `inlineReference`: file name
+- `toolInvocation`, `toolInvocationSerialized`: `pastTenseMessage` or `invocationMessage`, and `toolSpecificData.commandLine` for terminal commands
+- `textEditGroup`: name of the edited file
+- `confirmation`: `title` or `message`
 
-## Conventions
+Skipped on purpose: `thinking`, progress, warnings, references, code-block URIs, undo stops and other interface parts (`SKIP_KINDS`).
 
-- Keep `bridge.py` free of MCP imports; `server.py` is the only MCP-aware module.
-- Everything that leaves the machine for Telegram goes through `mask_secrets`, and every audit field through `AuditLog`.
-- Anything that can fail on the approval path must end in a deny. Add a test for every new failure path.
-- stdout belongs to the MCP protocol in the server: log to stderr only.
-- Bump `version` in `pyproject.toml` and `__init__.py` together, and add a `CHANGELOG.md` entry.
+A reply is complete when its request has `result`, or `isComplete: true`, or a `modelState` with `completedAt` or a value that is not zero, or when it is not the last request. An incomplete reply is sent after it stays the same for `--settle` seconds.
 
-## Known limitations
+Format 3, `GitHub.copilot-chat/transcripts/<id>.jsonl`: events `{"type", "id"?, "data": {...}}`, with `user.message` and `assistant.message` (`content`, `text` or `message`), and `tool.execution_start` (`toolName`, and `arguments` with `command`, `filePath` or `path`).
 
-See [ARCHITECTURE.md → Known limitations](ARCHITECTURE.md#known-limitations). The list lives only there.
+Dedupe keys: `<requestId>:u` and `:a` for chat sessions, `<event id>:u`, `:a` and `:t` for transcripts. If you change these keys, every watcher sends all its history again. Do not change them.
+
+When a format changes: copy a small, scrubbed sample into `tests/fixtures/`, add a test in `tests/test_sessions.py`, and then fix the parser.
+
+## Rules for the code
+
+- `bridge.py` has no MCP imports. `server.py` is the only module that knows MCP.
+- Everything that goes to Telegram passes through `mask_secrets`. Every audit field passes through `AuditLog`.
+- Everything that can fail on the approval path must end in a deny. Add a test for each new failure path.
+- In the server, stdout is for the MCP protocol. Log only to stderr.
+- To release: change `version` in `pyproject.toml` and `__init__.py` together, and add a `CHANGELOG.md` entry.
+
+Known limitations are only in [ARCHITECTURE.md](ARCHITECTURE.md#known-limitations).
 
 ## Roadmap
 
-1. **`preToolUse` hook to block the built-in shell.** Use Copilot's agent hooks (`.github/hooks/*.json`, `preToolUse`) to deny the built-in terminal tool and point the model at `run_command`. This closes the Copilot-harness gap where Run in Terminal can't be unticked. Needs testing against the current hook schema in VS Code and the Copilot harness.
-2. **Slack and Discord.** Factor the `Api` protocol in `broker.py` into a transport interface (send, edit, buttons, poll or socket), then add Slack (Socket Mode, Block Kit buttons) and Discord (gateway, components) backends selected by config.
-3. **File-edit approval.** Options: a `write_file` / `apply_patch` MCP tool that shows a diff in Telegram, combined with `chat.tools.edits.autoApprove` rules so built-in edits to sensitive paths still need a click; or a git-based "approve the diff before commit" flow.
-4. **Better multi-window support.** One poller shared across windows (a small local daemon), removing the one-bot-per-window rule.
-5. **Packaging.** Publish to PyPI so setup is `pipx install vscode-copilot-telegram`.
-6. **Real-world fixtures** for chat formats on Windows, macOS, and VS Code Server.
-7. **Full paths for the shells on Windows.** `runner.py` starts `powershell`, `pwsh`, `cmd.exe`, and `bash` by name. For a bare name Windows looks in the server's current folder before the system folders, so a file with that name in the workspace could run in place of the real shell. `taskkill` already uses its full path; the shells need the same, and a Windows machine to test it.
+To do, in order of value:
+
+1. A `preToolUse` hook that blocks the built-in shell. Use the agent hooks of Copilot (`.github/hooks/*.json`, `preToolUse`) to deny the built-in terminal and point the model to `run_command`. This closes the gap in the Copilot harness where Run in Terminal cannot be unticked. It needs a test with the current hook schema.
+2. Approval for file edits. Options: a `write_file` or `apply_patch` MCP tool that shows a diff in Telegram, with `chat.tools.edits.autoApprove` rules so built-in edits to sensitive paths ask for a click. Or an approval of the diff before a commit.
+3. One poller for several windows (a small local daemon), to remove the one-bot-for-each-window rule.
+4. Full paths for the shells on Windows. `runner.py` starts `powershell`, `pwsh`, `cmd.exe` and `bash` by name. For a bare name, Windows looks in the current folder of the server before the system folders. A file with that name in the project could run in place of the real shell. `taskkill` already uses its full path. It needs a Windows machine to test.
+5. Publish to PyPI, so setup is `pipx install vscode-copilot-telegram`.
+6. Slack and Discord. Move the `Api` protocol in `broker.py` to a transport interface (send, edit, buttons, read), and add Slack (Socket Mode, Block Kit) and Discord (gateway, components).
+7. Real chat file samples from Windows, macOS and VS Code Server, as fixtures.

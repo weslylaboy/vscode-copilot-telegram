@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "vscode-copilot-telegram": {
+      "type": "stdio",
+      "command": "TOOL_DIR/.venv/bin/vscode-copilot-telegram",
+      "args": ["--workspace", "PROJECT"],
+      "tools": ["*"]
+    }
+  }
+}

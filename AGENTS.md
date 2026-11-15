@@ -97,7 +97,7 @@ File edits, the built-in "Run in Terminal" tool, and other MCP servers are not g
 
 | Change | Also update |
 | --- | --- |
-| User-facing behavior, setup, or CLI flags | [`README.md`](README.md) if it is a headline feature, plus the relevant file under [`docs/`](docs/) (`SETUP.md`, `CONFIGURATION.md`, `TROUBLESHOOTING.md`, `DEVELOPMENT.md`, `ARCHITECTURE.md`) |
+| User-facing behavior, setup, or CLI flags | [`README.md`](README.md) if it is a headline feature, plus the relevant file under [`docs/`](docs/) (`SETUP.md`, `WATCHER.md`, `CONFIGURATION.md`, `TROUBLESHOOTING.md`, `DEVELOPMENT.md`, `ARCHITECTURE.md`). Follow [`docs/STYLE.md`](docs/STYLE.md) when you write docs. |
 | Security properties, token handling, or threat model | [`SECURITY.md`](SECURITY.md) |
 | Module boundaries or request flow | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (the module map lives there), and this file if a rule here changes |
 | Agent/contributor workflow | this file, and a short pointer in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) if needed |

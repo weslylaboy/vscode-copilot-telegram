@@ -26,7 +26,7 @@ Python 3.11 is the minimum (`tomllib`, `Path.is_relative_to`, modern typing). CI
 ## Run the tests
 
 ```bash
-pytest -q                          # all tests (146, about 7 s)
+pytest -q                          # all tests (175, about 20 s)
 pytest -q tests/test_bridge.py     # one file
 pytest -q -k timeout               # by name
 mypy                               # type check of src/
@@ -41,9 +41,10 @@ The pytest options are in `pyproject.toml` (`asyncio_mode = "auto"`).
 | `tests/test_masking.py` | Each masking pattern |
 | `tests/test_runner.py` | Output capture, timeout kill, Windows kill with the full path of `taskkill`, token removed from the environment, truncation |
 | `tests/test_workspace.py` | cwd resolution, escapes with `..`, absolute paths, sibling prefix and symlinks, missing folders |
-| `tests/test_config.py` | The project `.env` is never loaded, the `.env` order, the audit log default and a leftover `log_path`, the allow list (ignored until accepted, ignored again when it changes, per project, refused when too broad, warnings, a copy inside the project not trusted), `--accept-policy` refusing as a script and working in a pseudo-terminal (not on Windows) |
+| `tests/test_config.py` | The project `.env` is never loaded, the `.env` order, the audit log default and a leftover `log_path`, `vscode_wait_s` (default and limits), the allow list (ignored until accepted, ignored again when it changes, per project, refused when too broad, warnings, a copy inside the project not trusted), `--accept-policy` refusing as a script and working in a pseudo-terminal (not on Windows) |
+| `tests/test_vscode_first.py` | Ask in VS Code first, then Telegram: an answer in VS Code sends no Telegram message, Telegram after the wait and the form closed when it answers, a VS Code answer after Telegram was sent (the Telegram button stops working), deny with note, a client that cannot ask, a prompt that crashes, `vscode_wait_s = 0`, a dismissed form, nobody answers, Telegram down (fail closed, but a VS Code answer still counts), a cancelled tool call, a denial beating an approval, auto-approved commands, and the same for `ask_user` |
 | `tests/test_sessions.py` | The three chat formats (fixtures in `tests/fixtures/`), replay of the log, file URI decoding, storage matching, message splitting, and the watcher: no duplicates after a restart, settle time, no flood of old history, backfill, retry after a send failure |
-| `tests/test_mcp_smoke.py` | Starts the real server with `python -m vscode_copilot_telegram` over stdio, lists the tools, checks that calls fail closed with Telegram on a closed local port, and without credentials |
+| `tests/test_mcp_smoke.py` | Starts the real server with `python -m vscode_copilot_telegram` over stdio, lists the tools, checks that calls fail closed with Telegram on a closed local port, and without credentials. It also answers the VS Code form like VS Code would: approve, deny with a note, an `ask_user` option, a dismissed form, a late answer when Telegram is down, and the form being cancelled when the server gives up (skipped on `mcp` 1.x) |
 
 `tests/conftest.py` has `FakeTelegram` (an in-memory replacement for `TelegramAPI`) and the `make_bridge` fixture.
 
@@ -70,6 +71,13 @@ No test uses the real Telegram API or needs a token. `VSCODE_COPILOT_TELEGRAM_AP
 ## Manual checklist
 
 Do these in order, in a new Agent chat in your project. Each one must pass.
+
+The Telegram checks below need the message on Telegram without waiting. Put `vscode_wait_s = 10` in `vscode-copilot-telegram.toml` (restart the server), and do not answer the VS Code form. Or use `vscode_wait_s = 0` to skip the form.
+
+- [ ] VS Code form: with the default `vscode_wait_s`, ask `Use run_command to run git status`. A form appears in the chat. Choose approve. The command runs, and you get no Telegram message.
+- [ ] Telegram after the wait: with `vscode_wait_s = 10`, ask the same and do not answer. After 10 seconds a message arrives that says "No answer in VS Code", and the form is still open. Tap Approve. The form closes (this needs `mcp` 2.x) and Copilot reports the result.
+- [ ] VS Code after Telegram: do it again, but answer the form after the message arrived. The Telegram message says "Approved in VS Code", and tapping its button says Already answered.
+- [ ] Autopilot: switch the chat to Autopilot and ask for a command. The question goes to Telegram at once.
 
 - [ ] Telegram: `vscode-copilot-telegram --test --workspace PROJECT` prints `sent`, and the message arrives.
 - [ ] Server: **MCP: List Servers** shows it Running with 3 tools.

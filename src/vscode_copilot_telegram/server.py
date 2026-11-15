@@ -12,25 +12,27 @@ import asyncio
 import logging
 import os
 import sys
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 try:  # mcp >= 2.0
     from mcp.server import MCPServer as _Server  # type: ignore[attr-defined]
+    from mcp.server.mcpserver import Context  # type: ignore[attr-defined,import-not-found]
 except ImportError:  # mcp 1.x
+    from mcp.server.fastmcp import Context  # type: ignore[no-redef,attr-defined]
     from mcp.server.fastmcp import FastMCP as _Server  # type: ignore[no-redef,attr-defined]
 
-from pydantic import Field
+from pydantic import BaseModel, Field, create_model
 
 from .broker import Broker
 from .config import (ConfigError, accept_policy, ignored_project_env_names, load_env_files, load_settings,
                      resolve_workspace_root, telegram_credentials)
-from .bridge import Bridge
+from .bridge import Bridge, LocalAnswer, LocalPrompt, LocalQuestion
 from .telegram import TelegramAPI
 
 log = logging.getLogger("vscode_copilot_telegram")
 
 INSTRUCTIONS = (
-    "Use run_command for every shell command; the user approves each one from Telegram. "
+    "Use run_command for every shell command; the user approves each one in VS Code or on Telegram. "
     "Use ask_user whenever you need a decision or information from the user. "
     "Use notify for short progress updates at milestones."
 )
@@ -47,14 +49,91 @@ def _get_bridge() -> Bridge:
     return _bridge
 
 
+# ---------------- ask in VS Code first ----------------
+# Each question has two forms: a dropdown (mcp 2.x accepts it) and plain text fields (the only thing
+# mcp 1.x accepts). The dropdown is tried first.
+class _ApprovalForm(BaseModel):
+    decision: Literal["approve", "deny"] = Field(description="Approve or deny the command")
+    note: str = Field(default="", description="Optional note for Copilot (used when you deny)")
+
+
+class _ApprovalFormText(BaseModel):
+    decision: str = Field(description="Type approve or deny")
+    note: str = Field(default="", description="Optional note for Copilot (used when you deny)")
+
+
+def _question_forms(options: list[str]) -> tuple[type[BaseModel], type[BaseModel]]:
+    if not options:
+        form = create_model("QuestionForm", answer=(str, Field(description="Your answer")))
+        return form, form
+    choice: Any = Literal[tuple(options)]  # type: ignore[valid-type]
+    dropdown = create_model("QuestionForm", choice=(choice, Field(description="Your answer")))
+    text = create_model("QuestionFormText", choice=(str, Field(description="Type one of: " + ", ".join(options))))
+    return dropdown, text
+
+
+def _client_can_elicit(ctx: Any) -> bool:
+    """True if the MCP client (VS Code) can show a form to the user."""
+    try:
+        caps = getattr(ctx, "client_capabilities", None)  # mcp 2.x
+        if caps is not None:
+            return bool(getattr(caps, "elicitation", None))
+        from mcp import types
+        session = ctx.request_context.session  # mcp 1.x
+        return bool(session.check_client_capability(
+            types.ClientCapabilities(elicitation=types.ElicitationCapability())))
+    except Exception:  # noqa: BLE001 - not being able to tell means: do not use VS Code
+        return False
+
+
+async def _elicit(ctx: Any, message: str, dropdown: type[BaseModel], text: type[BaseModel]) -> Any:
+    try:
+        return await ctx.elicit(message, dropdown)
+    except TypeError:  # mcp 1.x refuses dropdown fields
+        return await ctx.elicit(message, text)
+
+
+def vscode_prompt(ctx: Any) -> LocalPrompt:
+    """Build the function that asks the user in VS Code with an MCP elicitation form.
+
+    It waits until the user answers. The caller cancels it (which makes the SDK tell VS Code to
+    close the form) when Telegram answers first. It returns None when VS Code cannot ask or the
+    user dismisses the form, so the caller falls back to Telegram."""
+    async def ask(question: LocalQuestion) -> LocalAnswer | None:
+        if not _client_can_elicit(ctx):
+            return None
+        try:
+            if question.kind == "approval":
+                result = await _elicit(ctx, question.message, _ApprovalForm, _ApprovalFormText)
+            else:
+                result = await _elicit(ctx, question.message, *_question_forms(question.options))
+        except Exception as exc:  # noqa: BLE001 - e.g. no back-channel on this connection
+            log.info("VS Code did not take the question (%s); using Telegram", exc)
+            return None
+        if result.action == "decline" and question.kind == "approval":
+            return LocalAnswer("deny")
+        if result.action != "accept":
+            return None
+        data = result.data
+        if question.kind == "approval":
+            if str(data.decision).strip().lower() != "approve":  # only an exact "approve" approves
+                return LocalAnswer("deny", (data.note or "").strip() or None)
+            return LocalAnswer("approve")
+        if question.options:
+            return LocalAnswer("option", str(data.choice))
+        return LocalAnswer("text", data.answer)
+    return ask
+
+
 @mcp.tool()
 async def ask_user(
+    ctx: Context,
     question: Annotated[str, Field(description="The question for the user. Be specific and self-contained.")],
     options: Annotated[list[str] | None, Field(description="Optional choices shown as buttons. "
                                                            "The user may still type a free-text answer.")] = None,
     timeout_s: Annotated[int | None, Field(description="Seconds to wait (default from config, 600).")] = None,
 ) -> str:
-    """Ask the user a question on Telegram and wait for the answer.
+    """Ask the user a question, first in VS Code and then on Telegram, and wait for the answer.
 
     Returns the user's answer text, or the string 'timeout' if they did not answer in time.
     """
@@ -62,19 +141,20 @@ async def ask_user(
         bridge = _get_bridge()
     except RuntimeError as exc:
         return f"error: {exc}"
-    return await bridge.ask_user(question, options, timeout_s)
+    return await bridge.ask_user(question, options, timeout_s, local_prompt=vscode_prompt(ctx))
 
 
 @mcp.tool()
 async def run_command(
+    ctx: Context,
     command: Annotated[str, Field(description="The exact shell command to run.")],
     reason: Annotated[str, Field(description="One sentence on why this command is needed.")],
     cwd: Annotated[str | None, Field(description="Working directory, absolute or relative to the "
                                                  "workspace root. Must be inside the workspace.")] = None,
-    timeout_s: Annotated[int | None, Field(description="Seconds to wait for approval (default 600). "
-                                                       "No answer means denied.")] = None,
+    timeout_s: Annotated[int | None, Field(description="Seconds to wait for approval on Telegram "
+                                                       "(default 600). No answer means denied.")] = None,
 ) -> dict[str, Any]:
-    """Run a shell command in the workspace after the user approves it on Telegram.
+    """Run a shell command in the workspace after the user approves it in VS Code or on Telegram.
 
     Returns decision (approved, auto-approved, denied, denied-timeout, denied-error, blocked, rejected),
     exit_code (null if not run), and output (combined stdout/stderr, truncated). If denied, the command
@@ -84,7 +164,7 @@ async def run_command(
         bridge = _get_bridge()
     except RuntimeError as exc:
         return {"decision": "denied-error", "exit_code": None, "output": f"Not run: {exc}"}
-    return await bridge.run_command(command, reason, cwd, timeout_s)
+    return await bridge.run_command(command, reason, cwd, timeout_s, local_prompt=vscode_prompt(ctx))
 
 
 @mcp.tool()

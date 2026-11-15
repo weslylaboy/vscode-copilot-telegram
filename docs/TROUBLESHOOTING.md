@@ -9,6 +9,7 @@ First, look at the logs:
 Problems:
 
 - [No Telegram messages](#no-telegram-messages)
+- [The question does not come to Telegram, or no form appears in VS Code](#the-question-does-not-come-to-telegram-or-no-form-appears-in-vs-code)
 - [Buttons do not answer](#buttons-do-not-answer)
 - [409 Conflict](#409-conflict)
 - [The allow list does nothing](#the-allow-list-does-nothing)
@@ -44,6 +45,20 @@ If `--test` works but nothing arrives from Copilot:
 
 - Look at the output of the server. A line with `configuration error` means all commands are refused. The test runs in your terminal, but VS Code can start the server with another environment. Check `command` and `--workspace` in `.mcp.json`.
 - Copilot may use its built-in terminal. See [Copilot uses the built-in terminal](#copilot-uses-the-built-in-terminal).
+
+## The question does not come to Telegram, or no form appears in VS Code
+
+Copilot asks in VS Code first. The same question goes to Telegram after `vscode_wait_s` seconds (180 by default), if you did not answer. See [CONFIGURATION.md](CONFIGURATION.md#ask-in-vs-code-first-then-telegram).
+
+| What you see | What it means |
+| --- | --- |
+| Nothing in Telegram for 3 minutes | This is normal. The form in VS Code is waiting for you. Answer it, or wait. To test faster, set `vscode_wait_s = 10` in `vscode-copilot-telegram.toml` and restart the server. |
+| The message in Telegram comes at once | VS Code cannot show the form, so the server skipped the wait. Look for `VS Code did not take the question` in the output of the server. The chat may be in Autopilot, or your VS Code does not support forms for MCP servers. |
+| No form in VS Code, and the message comes at once | Same as above. Telegram still works, so you are not blocked. |
+| The form stays open in VS Code after you answered on Telegram | You use `mcp` 1.x, which does not close it. Install `mcp` 2.x (`pip install -U mcp`) and restart the server. Answers to the old form are ignored. |
+| You want Telegram only | Set `vscode_wait_s = 0`. |
+
+The server output is in **MCP: List Servers**, the server, **Show Output**.
 
 ## Buttons do not answer
 

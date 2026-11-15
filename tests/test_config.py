@@ -127,6 +127,24 @@ def test_settings_that_do_not_loosen_the_gate_need_no_acceptance(env, tmp_path):
     assert s.policy_warning == "" and s.block == ["terraform apply"] and s.timeout_s == 30
 
 
+def test_vscode_wait_defaults_to_three_minutes_and_needs_no_acceptance(env, tmp_path):
+    project = tmp_path / "proj"
+    _toml(project, "block = ['x']\n")
+    assert config.load_settings(project).vscode_wait_s == 180
+
+    _toml(project, "vscode_wait_s = 0\n")
+    s = config.load_settings(project)
+    assert s.vscode_wait_s == 0 and s.policy_warning == ""
+
+
+@pytest.mark.parametrize("value", ["-1", "86401", "1.5", "'3 min'", "true"])
+def test_vscode_wait_must_be_a_whole_number_of_seconds(env, tmp_path, value):
+    project = tmp_path / "proj"
+    _toml(project, f"vscode_wait_s = {value}\n")
+    with pytest.raises(config.ConfigError, match="vscode_wait_s"):
+        config.load_settings(project)
+
+
 def test_unreadable_accepted_file_means_not_accepted(env, tmp_path):
     project = tmp_path / "proj"
     _toml(project, "allow = ['ls']\n")

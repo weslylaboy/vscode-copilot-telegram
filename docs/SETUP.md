@@ -292,12 +292,12 @@ More in [SECURITY.md](../SECURITY.md#files-in-the-project-that-can-change-the-ga
 
 ## 8. Pre-approve the tools
 
-Without this, every `run_command` asks twice. First VS Code asks `Allow tool from vscode-copilot-telegram?` with the buttons **Allow in this Session** and **Skip**. Then Telegram asks. Telegram is the real gate. It is safe to pre-approve because the tool waits for your tap.
+Without this, every `run_command` asks twice. First VS Code asks `Allow tool from vscode-copilot-telegram?` with the buttons **Allow in this Session** and **Skip**. Then the tool asks you to approve the command (in VS Code, and on Telegram if you do not answer). That second question is the real gate. It is safe to pre-approve the tool, because the command waits for your answer.
 
 1. Run **Chat: Manage Tool Approval** from the Command Palette.
 2. Under `vscode-copilot-telegram`, tick the box for pre-approval ("without approval").
 
-If you see the VS Code prompt before you do this, click **Allow in this Session**. The command still waits for your tap in Telegram. You can also open the arrow next to the button and choose a longer option, if it is there.
+If you see the VS Code prompt before you do this, click **Allow in this Session**. The command still waits for your approval. You can also open the arrow next to the button and choose a longer option, if it is there.
 
 ## 9. Tell Copilot to use the tools
 
@@ -325,16 +325,29 @@ That checks that VS Code found the file, not that Copilot follows it. There is n
 
 Open a new chat in agent mode, in `PROJECT`.
 
-Approve:
+Approve in VS Code:
 
 1. Write: `Use run_command to run git status`.
-2. In Telegram you get a message with the command, the reason, the folder, and three buttons.
-3. Tap Approve. The message changes to show the exit code and the output. Copilot shows the result.
+2. A form appears in the chat with the command and the reason. Choose approve.
+3. Copilot shows the result. You get no Telegram message, because you answered in VS Code.
+
+Approve on Telegram:
+
+1. To test it fast, add this line to `PROJECT/vscode-copilot-telegram.toml` and restart the server (**MCP: List Servers**, then **Restart**). The default is `180`, which means 3 minutes.
+
+   ```toml
+   vscode_wait_s = 10
+   ```
+
+2. Write: `Use run_command to run git status`. Do not answer the form.
+3. After 10 seconds you get a message in Telegram with the command, the reason, the folder, and three buttons. The form in VS Code is still open.
+4. Tap Approve. The message changes to show the exit code and the output. Copilot shows the result, and the form closes.
+5. Change `vscode_wait_s` back to `180` (or remove the line), and restart the server.
 
 Deny:
 
 1. Write: `Use run_command to run echo hello > denied.txt`.
-2. Tap Deny.
+2. Choose deny in the form (or tap Deny in Telegram).
 3. Copilot says the command was denied, and `denied.txt` does not exist.
 
 Block list:

@@ -11,18 +11,22 @@ It has two small Python programs (Python 3.11 or newer, Windows, macOS and Linux
 
 ## What you can do
 
-- Approve or deny each command Copilot wants to run. A command does not run until you tap Approve.
-- Answer questions from Copilot (`ask_user`), with buttons or a typed reply.
+- Approve or deny each command Copilot wants to run. A command does not run until you approve it, in VS Code or on Telegram.
+- Answer questions from Copilot (`ask_user`), in VS Code or on Telegram, with buttons or a typed reply.
+- Step away from the computer. Copilot asks you in VS Code first. If you do not answer in 3 minutes, the same question goes to Telegram, so you can answer from your phone and Copilot continues.
 - Read the Copilot chat in Telegram (the watcher).
 - Block dangerous commands (like `rm -rf /` or `git push --force`) without asking.
 
 ## How it works
 
 1. Copilot calls `run_command` instead of its built-in terminal.
-2. The server checks the command and sends you a message in Telegram with three buttons: Approve, Deny, Deny with note.
-3. You tap. Only on Approve the command runs. Copilot gets the exit code and the output.
+2. The server checks the command and shows you a form in VS Code: approve or deny, with an optional note.
+3. If you do not answer in 3 minutes (`vscode_wait_s`), the same question also goes to Telegram, with three buttons: Approve, Deny, Deny with note. The form in VS Code stays open.
+4. The first answer wins. Only on Approve the command runs. Copilot gets the exit code and the output.
 
-You turn off the built-in terminal of Copilot. Then `run_command` is the only way to run a command.
+`ask_user` works the same way for questions.
+
+Copilot also has a built-in terminal. You cannot switch it off in the Copilot harness, so the instructions file tells Copilot to use `run_command` instead. See [step 7 of SETUP](docs/SETUP.md#7-turn-off-the-built-in-terminal).
 
 Everything is outbound HTTPS to Telegram. You do not need open ports or a public URL.
 

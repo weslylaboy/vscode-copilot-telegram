@@ -6,8 +6,8 @@ This tool puts a human step between GitHub Copilot and your shell. It also sends
 
 | What Copilot does | Gated? |
 | --- | --- |
-| Shell commands with `run_command` | Yes. Telegram approval, block list, allow list, folder jail, audit log. |
-| Questions with `ask_user` | You answer in Telegram. |
+| Shell commands with `run_command` | Yes. Approval in VS Code or on Telegram, block list, allow list, folder jail, audit log. |
+| Questions with `ask_user` | You answer in VS Code or on Telegram. |
 | Shell commands with the built-in Run in Terminal | No. Turn it off (see [SETUP.md](docs/SETUP.md#7-turn-off-the-built-in-terminal)). |
 | File creation and edits (built-in edit tools) | No. Check with Keep/Undo in VS Code and with `git diff`. |
 | Tasks, notebooks, other MCP servers, extensions | No. |
@@ -22,7 +22,8 @@ Things to protect: your computer and project, your secrets (bot token, project c
 | Copilot runs a harmful command (a mistake, or a prompt injection from code, docs, web pages or tool output) | Every command needs your Approve. Built-in block list. `cwd` must be inside the project. Timeout means deny. | You approve without reading. The block list is patterns, and it can be avoided. It is a safety net, not a sandbox. |
 | Copilot uses the built-in terminal and skips the gate | You turn it off. The settings in SETUP make VS Code ask. | If it stays on and auto-approved, commands do not reach Telegram. |
 | A command leaves the project folder | `cwd` must resolve inside the project, after symlinks. | `cwd` is only the start folder. An approved command can run `cd ..` or use absolute paths. Read what you approve. |
-| Someone else answers | Only `TELEGRAM_USER_ID`, in that chat, is accepted. | Anyone with your unlocked phone or Telegram session can tap Approve. Use the passcode of Telegram and check your active sessions. |
+| Someone else answers | On Telegram, only `TELEGRAM_USER_ID`, in that chat, is accepted. In VS Code, the form is shown to the person who uses VS Code on the computer. | Anyone with your unlocked phone or Telegram session can tap Approve. Use the passcode of Telegram and check your active sessions. Anyone at your unlocked computer can answer the form. |
+| A client answers the VS Code form by itself, so a command is approved without a person | The form is shown by VS Code to you (the VS Code docs call it host-rendered input). VS Code cancels forms in Autopilot, so the question goes to Telegram. | This depends on VS Code. If your client answers forms on its own, set `vscode_wait_s = 0`. Then every approval needs a Telegram tap. |
 | An old approval is used again | Random id for each request, single-use, saved across restarts. A timeout also marks the request as answered. | |
 | Allow list abused with chaining (`npm test && curl ... \| sh`) | A pattern must match the whole command. `;`, `&&`, `\|\|`, `\|`, backticks, `$(`, `>`, `<`, a new line, or `&` at the end turn off auto-approval. | A broad pattern like `npm .*` still approves `npm install <bad package>`. Keep patterns narrow. |
 | Secrets go to Telegram | `mask_secrets` on everything sent and logged. The bot token is removed from the environment of commands and from error texts. | Masking is a best effort. An unusual format, or a secret split in two lines, can pass. Telegram keeps the chat on its servers. |

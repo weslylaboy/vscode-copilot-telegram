@@ -15,8 +15,8 @@ All code is in `src/vscode_copilot_telegram/`.
 | --- | --- | --- |
 | `__init__.py` | The version (`__version__`). Keep it equal to `pyproject.toml`. | |
 | `__main__.py` | `python -m vscode_copilot_telegram` starts the MCP server. | `server` |
-| `server.py` | MCP entry point. Declares the three tools, reads the flags (`--workspace`, `--test`, `--accept-policy`, `--log-level`), connects config, Telegram client, broker and bridge. Works with `mcp` 1.x (`FastMCP`) and 2.x (`MCPServer`). | `bridge`, `broker`, `config`, `telegram` |
-| `bridge.py` | The logic of the tools, without MCP, so tests can call it. `run_command` (jail, policy, ask, run, report), `ask_user`, `notify`. Builds the Telegram messages and the audit records. | `broker`, `policy`, `runner`, `workspace`, `masking`, `audit` |
+| `server.py` | MCP entry point. Declares the three tools, reads the flags (`--workspace`, `--test`, `--accept-policy`, `--log-level`), connects config, Telegram client, broker and bridge. `vscode_prompt` turns a question into an MCP elicitation form in VS Code (the only place that knows about forms). Works with `mcp` 1.x (`FastMCP`) and 2.x (`MCPServer`). | `bridge`, `broker`, `config`, `telegram` |
+| `bridge.py` | The logic of the tools, without MCP, so tests can call it. `run_command` (jail, policy, ask, run, report), `ask_user`, `notify`. `_decide` asks in VS Code first (through a `LocalPrompt` that `server.py` passes in) and on Telegram after `vscode_wait_s`. Builds the Telegram messages and the audit records. | `broker`, `policy`, `runner`, `workspace`, `masking`, `audit` |
 | `broker.py` | Matches Telegram replies to waiting requests. Request ids, buttons, callback parsing, typed replies, the single poller, `/pending` and `/help`, and the answered ids saved on disk. | `telegram` |
 | `telegram.py` | Small Bot API clients on `httpx`. `TelegramAPI` (async, for the server): `sendMessage`, `editMessageText`, `editMessageReplyMarkup`, `answerCallbackQuery`, `getUpdates`. `TelegramSender` (sync, send only, for the watcher, with retries). `split_message` for the 4096-character limit. The token is removed from error texts. | `httpx` |
 | `policy.py` | `CommandPolicy`: built-in and user block lists, the allow list, and the chaining check that turns off auto-approval. The block list wins. | |
@@ -36,23 +36,31 @@ Tests are in `tests/`, one file for each module, plus `test_mcp_smoke.py`. See [
 sequenceDiagram
     participant C as Copilot (agent mode)
     participant S as server
+    participant V as VS Code (form)
     participant T as Telegram
-    participant U as You (phone)
+    participant U as You
     C->>S: run_command(command, reason, cwd?)
     S->>S: cwd inside the project? (if not: rejected)
     S->>S: block list? (if yes: blocked, notice only)
     alt allow list match, no chaining
         S->>T: sendMessage "Auto-approved"
     else needs approval
-        S->>T: sendMessage + Approve / Deny / Deny with note
-        S->>T: getUpdates (only while something waits)
-        U->>T: tap
-        T-->>S: callback_query from TELEGRAM_USER_ID
-        S->>T: answerCallbackQuery, edit message (buttons removed)
+        S->>V: elicitation form: approve or deny
+        alt you answer within vscode_wait_s
+            U->>V: answer
+            V-->>S: accept or decline
+        else no answer in time
+            S->>T: sendMessage + Approve / Deny / Deny with note
+            S->>T: getUpdates (only while something waits)
+            U->>T: tap (or U answers the form, whichever is first)
+            T-->>S: callback_query from TELEGRAM_USER_ID
+            S->>V: cancel the form (notifications/cancelled)
+            S->>T: answerCallbackQuery, edit message (buttons removed)
+        end
     end
     alt approved or auto-approved
         S->>S: run in the shell, capture output
-        S->>T: edit message: exit code + end of output
+        S->>T: edit message: exit code + end of output (if one was sent)
         S-->>C: decision, exit_code, output
     else denied, timeout or Telegram error
         S-->>C: decision denied*, exit_code null (nothing ran)
@@ -62,6 +70,8 @@ sequenceDiagram
 
 `ask_user` is the same without the policy and the runner. Option buttons use the callback `ct|<id>|o<N>`. Typed text goes to the open question (by swipe-reply if several are open). `notify` is one `sendMessage`.
 
+If VS Code cannot show forms (no elicitation, no back-channel, Autopilot), or you dismiss the form, the server skips the wait and asks on Telegram at once. `vscode_wait_s = 0` turns the VS Code step off.
+
 ## Design decisions
 
 ### Fail closed
@@ -69,8 +79,9 @@ sequenceDiagram
 A command runs only after a positive decision. Every other path returns `denied*`, `blocked` or `rejected`, with `exit_code: null`:
 
 - Deny, or Deny with note: `denied`.
-- No tap before `timeout_s`: `denied-timeout`. A pending Deny with note gets a short time to finish the note, and then it is still a deny.
-- The approval message cannot be sent: `denied-error`.
+- No answer before `timeout_s` (it starts when the Telegram message is sent): `denied-timeout`. A pending Deny with note gets a short time to finish the note, and then it is still a deny.
+- The approval message cannot be sent and VS Code did not answer: `denied-error`. If Telegram fails but the VS Code form is still open, you can still answer it until `timeout_s` runs out.
+- If VS Code and Telegram answer at the same moment with different decisions, the denial wins.
 - Bad config or no token: the server still starts, so VS Code shows the tools. `run_command` returns `denied-error` with the error. `ask_user` and `notify` return `error: ...`.
 - `cwd` outside the project: `rejected`. Block list match or empty command: `blocked`.
 
@@ -93,6 +104,7 @@ Telegram allows one `getUpdates` reader for each bot. A second one gets `409 Con
 - Timed-out and cancelled requests are also marked answered, so a late Approve runs nothing.
 - After a decision, the message is edited and the buttons are removed.
 - Only updates from `TELEGRAM_USER_ID`, in that chat, are accepted.
+- If VS Code answers after the Telegram message was sent, the server cancels the Telegram request. Its id is marked answered, so a later tap does nothing, and the message is edited to say it was answered in VS Code.
 
 ### Masking
 
@@ -127,4 +139,6 @@ This is the only full list. Other docs link here.
 - Copilot must choose `run_command`. With the built-in terminal off it has no other way to run commands, but it can give up.
 - The watcher reads files that are not documented. A format change can break it, but it does not break approvals.
 - Telegram limits: a long command is cut to 2500 characters in the message (the full command still runs and is in the audit log). Output is cut from the start and the end is kept.
+- The VS Code form covers only `run_command` and `ask_user`. VS Code has no way for other programs to answer its own prompts (tool approval, the built-in terminal, file edits, Copilot's own question tool), so those stay in VS Code and are not sent to Telegram.
+- Forms need a client that supports MCP elicitation. `mcp` 1.x does not send `notifications/cancelled`, so the form stays open in VS Code after Telegram answered (a late answer is ignored). `mcp` 2.x closes it.
 - One user. One `TELEGRAM_USER_ID` for each server.

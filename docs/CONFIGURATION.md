@@ -40,7 +40,8 @@ Create `PROJECT/vscode-copilot-telegram.toml`. You can start from [examples/vsco
 
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
-| `timeout_s` | integer > 0 | `600` | Seconds to wait for your tap or your answer. No answer = denied (or `timeout` for a question). Copilot can send its own `timeout_s`, up to 24 hours. |
+| `timeout_s` | integer > 0 | `600` | Seconds to wait for your tap or your answer on Telegram. It starts when the Telegram message is sent. No answer = denied (or `timeout` for a question). Copilot can send its own `timeout_s`, up to 24 hours. |
+| `vscode_wait_s` | integer, 0 to 86400 | `180` | Copilot asks you in VS Code first. After this many seconds without an answer, the same question also goes to Telegram. The VS Code form stays open, so you can answer in either place. `0` = Telegram only, with no form in VS Code. |
 | `run_timeout_s` | integer > 0 | `900` | An approved command is killed, with all its child processes, after this time. |
 | `max_output_chars` | integer > 0 | `8000` | Output (stdout and stderr) returned to Copilot. If it is longer, the first quarter and the end stay, with a `[N characters truncated]` mark. |
 | `telegram_output_chars` | integer | `1500` | How much of the end of the output is shown in Telegram. Telegram has a limit of 4096 characters in a message. |
@@ -51,6 +52,25 @@ Create `PROJECT/vscode-copilot-telegram.toml`. You can start from [examples/vsco
 | `project_name` | string | folder name | Name shown in brackets at the start of each Telegram message. |
 
 `log_path` in this file is ignored. The audit log is outside the project, because Copilot can edit this file. The server writes a warning with the new path. To move the log, use `LOG_PATH`.
+
+### Ask in VS Code first, then Telegram
+
+`run_command` (when it needs your approval) and `ask_user` work in two steps:
+
+1. The server asks in VS Code, with a form in the chat. For a command, you choose approve or deny and can add a note. For a question, you choose an option or type the answer.
+2. If you do not answer in `vscode_wait_s` seconds, the same question also goes to Telegram. The form in VS Code stays open. The first answer wins, and the other place is closed.
+
+Details:
+
+- An answer in VS Code never sends a Telegram message.
+- If VS Code cannot show forms, or you close the form without answering, the question goes to Telegram at once.
+- Copilot in Autopilot mode cannot show forms. VS Code cancels them, so the question goes to Telegram at once.
+- `timeout_s` starts when the Telegram message is sent. If nobody answers by then, the command is denied.
+- If Telegram cannot be reached, you can still answer the form in VS Code until `timeout_s` runs out. After that the command is denied.
+- If both answer at the same moment with different decisions, the denial wins.
+- Auto-approved commands and blocked commands never ask in VS Code.
+- With `mcp` 1.x the form stays open in VS Code after Telegram answered. `mcp` 2.x closes it. Answers that come late are ignored.
+- Set `vscode_wait_s = 0` for the old way: Telegram only. Do this if your VS Code answers forms without asking you.
 
 ### Accept the allow list
 

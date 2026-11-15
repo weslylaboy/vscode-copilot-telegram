@@ -34,7 +34,8 @@ def default_audit_path(workspace_root: Path) -> Path:
 @dataclass
 class Settings:
     workspace_root: Path
-    timeout_s: int = 600              # approval / answer timeout
+    timeout_s: int = 600              # approval / answer timeout (counts from the Telegram message)
+    vscode_wait_s: int = 180          # ask in VS Code first; Telegram too after this long (0 = Telegram only)
     run_timeout_s: int = 900          # max runtime of an approved command
     max_output_chars: int = 8000      # output returned to Copilot
     telegram_output_chars: int = 1500  # output tail shown in Telegram
@@ -152,7 +153,7 @@ def _load_raw_settings(workspace_root: Path) -> Settings:
         if "token" in data or "bot_token" in data:
             raise ConfigError(f"{cfg}: do not put the bot token in the config file; use TELEGRAM_BOT_TOKEN")
         legacy_log_path = data.pop("log_path", None)
-    known = {"timeout_s", "run_timeout_s", "max_output_chars", "telegram_output_chars", "allow",
+    known = {"timeout_s", "vscode_wait_s", "run_timeout_s", "max_output_chars", "telegram_output_chars", "allow",
              "block", "use_default_block", "shell", "project_name"}
     unknown = set(data) - known
     if unknown:
@@ -167,6 +168,9 @@ def _load_raw_settings(workspace_root: Path) -> Settings:
     for name in ("timeout_s", "run_timeout_s", "max_output_chars"):
         if int(getattr(s, name)) <= 0:
             raise ConfigError(f"{name} must be positive")
+    if not isinstance(s.vscode_wait_s, int) or isinstance(s.vscode_wait_s, bool) \
+            or not 0 <= s.vscode_wait_s <= 24 * 3600:
+        raise ConfigError("vscode_wait_s must be a whole number of seconds from 0 to 86400 (0 = Telegram only)")
     return s
 
 

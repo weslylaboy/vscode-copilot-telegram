@@ -31,7 +31,7 @@ Python 3.11+ (CI: 3.11 and 3.12). No test should call the real Telegram API.
 ## Security invariants
 
 - Approvals fail closed: only `approved` / `auto-approved` run a command. Timeouts, Telegram errors, and bad config deny.
-- Only `TELEGRAM_USER_ID` can answer. Callback buttons are single-use (persisted across restarts).
+- Only `TELEGRAM_USER_ID` can answer on Telegram; in VS Code the answer comes from the elicitation form. Callback buttons are single-use (persisted across restarts).
 - `mask_secrets` on everything sent to Telegram or written to the audit log. Never commit `.env` or put a token in TOML.
 - Only the MCP server long-polls Telegram (`getUpdates`). The watcher is send-only. Do not add a second poller.
 - Never load the project's own `.env`. An allow list (or `use_default_block = false`) in the project TOML only counts after the user accepts it with `--accept-policy` (saved outside the project).

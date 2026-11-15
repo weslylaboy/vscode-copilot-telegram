@@ -1,7 +1,8 @@
 # Optional. Copy to the root of your project as vscode-copilot-telegram.toml.
 # Never put the bot token here; use TELEGRAM_BOT_TOKEN.
 
-timeout_s = 600            # seconds to wait for Approve/Deny or an answer; no answer = denied
+timeout_s = 600            # seconds to wait for Approve/Deny or an answer on Telegram; no answer = denied
+vscode_wait_s = 180        # ask in VS Code first; after this long also ask on Telegram (0 = Telegram only)
 run_timeout_s = 900        # an approved command is killed after this long
 max_output_chars = 8000    # output returned to Copilot
 telegram_output_chars = 1500

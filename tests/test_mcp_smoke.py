@@ -8,6 +8,7 @@ import json
 import os
 import sys
 
+import pytest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
@@ -72,3 +73,122 @@ async def test_server_without_credentials_refuses(workspace):
             await session.initialize()
             r = _payload(await session.call_tool("run_command", {"command": "echo hi", "reason": "x"}))
             assert r["decision"] == "denied-error" and "TELEGRAM_BOT_TOKEN" in r["output"]
+
+
+# ---- VS Code first: the server asks with an MCP elicitation form ----
+
+def _form(action="accept", **content):
+    from mcp import types
+    return types.ElicitResult(action=action, content=content or None)
+
+
+def _python_cmd(code):
+    return f'"{sys.executable}" -c "{code}"'
+
+
+async def test_vscode_form_approves_and_runs_without_telegram(workspace):
+    marker = workspace / "ran-after-vscode-approval"
+    asked = []
+
+    async def form(context, params):
+        asked.append(params.message)
+        return _form(decision="approve")
+
+    async with stdio_client(_params(workspace)) as (read, write):
+        async with ClientSession(read, write, elicitation_callback=form) as session:
+            await session.initialize()
+            cmd = _python_cmd(f"open(r'{marker}', 'w').close()")
+            r = _payload(await session.call_tool("run_command", {"command": cmd, "reason": "test"}))
+    assert r["decision"] == "approved" and r["exit_code"] == 0
+    assert marker.exists()
+    assert len(asked) == 1 and "test" in asked[0]
+    record = json.loads((workspace / ".vscode-copilot-telegram" / "audit.jsonl").read_text().splitlines()[-1])
+    assert record["decision"] == "approved" and record["via"] == "vscode"
+
+
+async def test_vscode_form_deny_returns_the_note_and_does_not_run(workspace):
+    marker = workspace / "must-not-exist"
+
+    async def form(context, params):
+        return _form(decision="deny", note="use the other script")
+
+    async with stdio_client(_params(workspace)) as (read, write):
+        async with ClientSession(read, write, elicitation_callback=form) as session:
+            await session.initialize()
+            cmd = _python_cmd(f"open(r'{marker}', 'w').close()")
+            r = _payload(await session.call_tool("run_command", {"command": cmd, "reason": "test"}))
+    assert r["decision"] == "denied" and r["note"] == "use the other script" and r["exit_code"] is None
+    assert not marker.exists()
+
+
+async def test_ask_user_is_answered_in_vscode(workspace):
+    async def form(context, params):
+        return _form(choice="SQLite")
+
+    async with stdio_client(_params(workspace)) as (read, write):
+        async with ClientSession(read, write, elicitation_callback=form) as session:
+            await session.initialize()
+            r = _payload(await session.call_tool(
+                "ask_user", {"question": "Which database?", "options": ["Postgres", "SQLite"]}))
+    assert r == "SQLite"
+
+
+async def test_dismissed_form_goes_to_telegram_and_fails_closed(workspace):
+    marker = workspace / "must-not-exist"
+
+    async def form(context, params):
+        return _form(action="cancel")
+
+    async with stdio_client(_params(workspace)) as (read, write):
+        async with ClientSession(read, write, elicitation_callback=form) as session:
+            await session.initialize()
+            cmd = _python_cmd(f"open(r'{marker}', 'w').close()")
+            r = _payload(await session.call_tool("run_command", {"command": cmd, "reason": "test"}))
+    assert r["decision"] == "denied-error" and r["exit_code"] is None  # Telegram is a closed port
+    assert not marker.exists()
+
+
+async def test_late_vscode_answer_still_counts_when_telegram_is_down(workspace):
+    """No answer for 1 s, so the server tries Telegram (down). The VS Code form stays open and a later
+    answer still approves."""
+    import asyncio
+    (workspace / "vscode-copilot-telegram.toml").write_text("vscode_wait_s = 1\n")
+    marker = workspace / "ran-after-late-approval"
+
+    async def form(context, params):
+        await asyncio.sleep(2)
+        return _form(decision="approve")
+
+    async with stdio_client(_params(workspace)) as (read, write):
+        async with ClientSession(read, write, elicitation_callback=form) as session:
+            await session.initialize()
+            cmd = _python_cmd(f"open(r'{marker}', 'w').close()")
+            r = _payload(await session.call_tool("run_command", {"command": cmd, "reason": "test", "timeout_s": 30}))
+    assert r["decision"] == "approved" and marker.exists()
+
+
+def _mcp_major() -> int:
+    from importlib.metadata import version
+    return int(version("mcp").split(".")[0])
+
+
+@pytest.mark.skipif(_mcp_major() < 2, reason="mcp 1.x does not send notifications/cancelled, so the form stays open")
+async def test_unanswered_form_is_cancelled_when_the_server_gives_up(workspace):
+    import asyncio
+    (workspace / "vscode-copilot-telegram.toml").write_text("vscode_wait_s = 1\n")
+    cancelled = asyncio.Event()
+
+    async def form(context, params):
+        try:
+            await asyncio.sleep(60)
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+        return _form(action="cancel")
+
+    async with stdio_client(_params(workspace)) as (read, write):
+        async with ClientSession(read, write, elicitation_callback=form) as session:
+            await session.initialize()
+            r = _payload(await session.call_tool("run_command", {"command": "echo hi", "reason": "x", "timeout_s": 1}))
+            await asyncio.wait_for(cancelled.wait(), 5)
+    assert r["decision"] == "denied-error" and r["exit_code"] is None

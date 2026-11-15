@@ -126,6 +126,11 @@ class Broker:
     def is_answered(self, rid: str) -> bool:
         return rid in self._answered
 
+    def message_id_of(self, rid: str) -> int | None:
+        """The Telegram message of a request that is still waiting (None if it has none yet or is done)."""
+        p = self._pending.get(rid)
+        return p.message_id if p else None
+
     async def ask(self, rid: str, kind: str, html: str, reply_markup: dict | None,
                   timeout_s: float, options: list[str] | None = None,
                   note_grace_s: float = 120.0) -> Ticket:

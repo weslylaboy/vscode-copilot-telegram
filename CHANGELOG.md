@@ -9,9 +9,10 @@ First release. Replace "unreleased" with the date when you tag it.
 ### Added
 
 - `vscode-copilot-telegram` MCP server (stdio) with three tools for GitHub Copilot agent mode in VS Code:
-  - `run_command`: runs a shell command in the workspace only after you tap **Approve** in Telegram; **Deny** and **Deny with note** send the decision (and your note) back to Copilot.
-  - `ask_user`: asks a question with optional answer buttons or a free-text reply.
+  - `run_command`: runs a shell command in the workspace only after you approve it, first in VS Code and then, if you do not answer in time, on Telegram with **Approve**; **Deny** and **Deny with note** send the decision (and your note) back to Copilot.
+  - `ask_user`: asks a question with optional answer buttons or a free-text reply, first in VS Code and then on Telegram.
   - `notify`: one-way status message.
+- Ask in VS Code first: `run_command` and `ask_user` show an MCP elicitation form in VS Code. If you do not answer within `vscode_wait_s` seconds (default 180), the same question also goes to Telegram, the form stays open, and the first answer wins. If VS Code cannot show forms, the question goes to Telegram at once (`vscode_wait_s = 0` keeps the old Telegram-only way). The audit log records where the answer came from (`via`).
 - Fail-closed approvals: deny on timeout (default 600 s), Telegram errors, or configuration errors.
 - Built-in block list (destructive `rm`, force pushes, disk wipes, `curl | sh`, fork bomb, power commands) plus user `block` patterns.
 - Allow list with whole-command matching; commands with shell chaining are never auto-approved. An allow list only works after you accept it (see **Security**).

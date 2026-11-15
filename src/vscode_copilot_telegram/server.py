@@ -86,6 +86,20 @@ def _client_can_elicit(ctx: Any) -> bool:
         return False
 
 
+def _describe_client(ctx: Any) -> str:
+    """What the MCP client says about itself, for the log (best effort)."""
+    try:
+        info = None
+        caps = getattr(ctx, "client_capabilities", None)  # mcp 2.x
+        if caps is None:
+            params = ctx.request_context.session.client_params  # mcp 1.x
+            caps, info = params.capabilities, params.clientInfo
+        shown = caps.model_dump(exclude_none=True) if caps is not None else "none"
+        return f"capabilities {shown}" + (f", client {info.name} {info.version}" if info else "")
+    except Exception:  # noqa: BLE001
+        return "unknown"
+
+
 async def _elicit(ctx: Any, message: str, dropdown: type[BaseModel], text: type[BaseModel]) -> Any:
     try:
         return await ctx.elicit(message, dropdown)
@@ -101,6 +115,8 @@ def vscode_prompt(ctx: Any) -> LocalPrompt:
     user dismisses the form, so the caller falls back to Telegram."""
     async def ask(question: LocalQuestion) -> LocalAnswer | None:
         if not _client_can_elicit(ctx):
+            log.info("VS Code cannot show a form: the client did not declare elicitation (%s); using Telegram",
+                     _describe_client(ctx))
             return None
         try:
             if question.kind == "approval":

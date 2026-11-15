@@ -292,12 +292,12 @@ More in [SECURITY.md](../SECURITY.md#files-in-the-project-that-can-change-the-ga
 
 ## 8. Pre-approve the tools
 
-Without this, every `run_command` asks twice: in VS Code and in Telegram. Telegram is the real gate. It is safe to pre-approve because the tool waits for your tap.
+Without this, every `run_command` asks twice. First VS Code asks `Allow tool from vscode-copilot-telegram?` with the buttons **Allow in this Session** and **Skip**. Then Telegram asks. Telegram is the real gate. It is safe to pre-approve because the tool waits for your tap.
 
 1. Run **Chat: Manage Tool Approval** from the Command Palette.
 2. Under `vscode-copilot-telegram`, tick the box for pre-approval ("without approval").
 
-You can also choose Always Allow the first time Copilot calls one of the tools.
+If you see the VS Code prompt before you do this, click **Allow in this Session**. The command still waits for your tap in Telegram. You can also open the arrow next to the button and choose a longer option, if it is there.
 
 ## 9. Tell Copilot to use the tools
 
@@ -313,7 +313,13 @@ Copy [examples/copilot-instructions.md](../examples/copilot-instructions.md) to 
 - Never put secrets, tokens, or .env contents in a command, question, or notification.
 ```
 
-Check that the setting `github.copilot.chat.codeGeneration.useInstructionFiles` is on. It is on by default.
+Check that VS Code found the file:
+
+1. Run **Chat: Open Customizations** from the Command Palette.
+2. Open **Instructions**. `.github/copilot-instructions.md` must be in the list.
+3. After a reply, look at **References** under it. The file should be there.
+
+That checks that VS Code found the file, not that Copilot follows it. There is no setting to turn on. The Copilot harness reads this file by itself ([VS Code docs](https://code.visualstudio.com/docs/agent-customization/custom-instructions)).
 
 ## 10. Try it
 

@@ -112,8 +112,8 @@ Delete the `log_path` line from the TOML file to remove the warning. To use anot
 
 You see a VS Code prompt "Run command?", or a command runs and there is no Telegram message.
 
-1. Add the two settings from [SETUP.md](SETUP.md#7-limit-the-built-in-terminal). You cannot switch the built-in terminal off in the Copilot harness. The Tools tab shows it as read-only.
-2. Check that `PROJECT/.github/copilot-instructions.md` has the text from [examples/copilot-instructions.md](../examples/copilot-instructions.md), and that `github.copilot.chat.codeGeneration.useInstructionFiles` is on.
+1. Add the two settings from [SETUP.md](SETUP.md#7-turn-off-the-built-in-terminal). You cannot switch the built-in terminal off in the Copilot harness. The Tools tab shows it as read-only.
+2. Check that `PROJECT/.github/copilot-instructions.md` has the text from [examples/copilot-instructions.md](../examples/copilot-instructions.md). Then check that VS Code found it: **Chat: Open Customizations**, then **Instructions**.
 3. Check that the server and `run_command` are enabled.
 4. Ask once: `Use run_command for this.`
 5. Do not use the permission levels Allow all and Autopilot in this project. They skip confirmations for built-in tools.

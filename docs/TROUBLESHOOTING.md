@@ -56,6 +56,7 @@ Copilot asks in VS Code first. The same question goes to Telegram after `vscode_
 | The message in Telegram comes at once | VS Code cannot show the form, so the server skipped the wait. Look for `VS Code did not take the question` in the output of the server. The chat may be in Autopilot, or your VS Code does not support forms for MCP servers. |
 | No form in VS Code, and the message comes at once | Same as above. Telegram still works, so you are not blocked. |
 | The form stays open in VS Code after you answered on Telegram | You use `mcp` 1.x, which does not close it. Install `mcp` 2.x (`pip install -U mcp`) and restart the server. Answers to the old form are ignored. |
+| The server output says `Cannot send 'elicitation/create': this transport context has no back-channel` | The client connected with the 2026-07-28 protocol, where forms cannot work. The server should refuse that protocol and print `answering server/discover with 'method not found'` at the start. If you do not see that line, you may run an old copy of the server: restart it and check the `command` in `.mcp.json`. |
 | You want Telegram only | Set `vscode_wait_s = 0`. |
 
 The server output is in **MCP: List Servers**, the server, **Show Output**.

@@ -192,3 +192,24 @@ async def test_unanswered_form_is_cancelled_when_the_server_gives_up(workspace):
             r = _payload(await session.call_tool("run_command", {"command": "echo hi", "reason": "x", "timeout_s": 1}))
             await asyncio.wait_for(cancelled.wait(), 5)
     assert r["decision"] == "denied-error" and r["exit_code"] is None
+
+
+@pytest.mark.skipif(_mcp_major() < 2, reason="only mcp 2.x also speaks the newer protocol")
+async def test_a_client_that_tries_the_new_protocol_first_still_gets_the_form(workspace):
+    """Copilot's runtime sends `server/discover` first. The server refuses it, so the client falls back to the
+    `initialize` protocol, where the server can ask the user. With the new protocol the form would fail with
+    'no back-channel' and every question would go to Telegram."""
+    from mcp.client import Client
+
+    marker = workspace / "ran-after-form"
+    asked = []
+
+    async def form(context, params):
+        asked.append(params.message)
+        return _form(decision="approve")
+
+    async with Client(_params(workspace), elicitation_callback=form, mode="auto") as client:
+        assert not str(client.protocol_version).startswith("2026")  # the older protocol was chosen
+        cmd = _python_cmd(f"open(r'{marker}', 'w').close()")
+        result = await client.call_tool("run_command", {"command": cmd, "reason": "test"})
+    assert _payload(result)["decision"] == "approved" and marker.exists() and len(asked) == 1

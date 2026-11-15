@@ -106,6 +106,10 @@ Telegram allows one `getUpdates` reader for each bot. A second one gets `409 Con
 - Only updates from `TELEGRAM_USER_ID`, in that chat, are accepted.
 - If VS Code answers after the Telegram message was sent, the server cancels the Telegram request. Its id is marked answered, so a later tap does nothing, and the message is edited to say it was answered in VS Code.
 
+### The older protocol only (mcp 2.x)
+
+`mcp` 2.x also speaks the 2026-07-28 protocol. In it, a server cannot ask the user while a call is running (`ctx.elicit` fails with "no back-channel"). Copilot's runtime tries that protocol first, with `server/discover`, and falls back to `initialize` only if the server refuses. So `server.py` answers `server/discover` with "method not found" (`_LegacyOnlyRead`, used by `_run_stdio_legacy_only`). The client then uses the `initialize` protocol, where the form works. Without this, every question skips the form and goes to Telegram at once. `mcp` 1.x only speaks the older protocol, so it needs nothing. If this mcp version does not have the pieces, the server starts normally.
+
 ### Masking
 
 `mask_secrets` runs on everything that goes to Telegram (commands, reasons, questions, answers, output, notices, mirrored chat) and on every string in the audit log. It prefers to mask too much. The output to Copilot is not masked, because Copilot already has the files and needs the real output. Masking is a best effort. See [SECURITY.md](../SECURITY.md).

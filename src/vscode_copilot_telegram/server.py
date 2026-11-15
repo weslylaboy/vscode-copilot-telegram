@@ -195,6 +195,81 @@ async def notify(
     return await bridge.notify(message)
 
 
+# ---------------- speak the older MCP protocol only ----------------
+# mcp 2.x also speaks the 2026-07-28 protocol. A client that tries it first (Copilot's runtime sends
+# `server/discover`) gets it, and in that protocol a server cannot ask the user while a call is running:
+# `ctx.elicit` fails with "no back-channel". The form in VS Code needs the older `initialize` protocol.
+# So this server answers `server/discover` with "method not found", and the client falls back to `initialize`.
+class _LegacyOnlyRead:
+    """Wraps the SDK's input stream and refuses `server/discover` (see above). mcp 2.x only."""
+
+    def __init__(self, inner: Any, write: Any, refuse: Any) -> None:
+        self._inner = inner
+        self._write = write
+        self._refuse = refuse  # builds the reply for a refused request
+
+    async def _skip(self, item: Any) -> bool:
+        request: Any = getattr(item, "message", None)
+        if getattr(request, "method", None) == "server/discover" and getattr(request, "id", None) is not None:
+            log.info("answering server/discover with 'method not found', so the client uses the initialize protocol")
+            await self._write.send(self._refuse(request.id))
+            return True
+        return False
+
+    async def receive(self) -> Any:
+        while True:
+            item = await self._inner.receive()
+            if not await self._skip(item):
+                return item
+
+    async def aclose(self) -> None:
+        await self._inner.aclose()
+
+    def __aiter__(self) -> "_LegacyOnlyRead":
+        return self
+
+    async def __anext__(self) -> Any:
+        while True:
+            item = await self._inner.__anext__()  # raises StopAsyncIteration at the end
+            if not await self._skip(item):
+                return item
+
+    async def __aenter__(self) -> "_LegacyOnlyRead":
+        return self
+
+    async def __aexit__(self, *exc: Any) -> None:
+        await self.aclose()
+
+    @property
+    def last_context(self) -> Any:  # the SDK reads the sender's context from here
+        return getattr(self._inner, "last_context", None)
+
+
+def _run_stdio_legacy_only() -> bool:
+    """Serve over stdio with the older protocol only. Returns False (nothing was started) if this mcp
+    version does not have the pieces, for example mcp 1.x, which only speaks the older protocol anyway."""
+    try:
+        import anyio
+        import mcp_types  # type: ignore[import-not-found]
+        from mcp.server.stdio import stdio_server
+        from mcp.shared.message import SessionMessage
+        lowlevel = mcp._lowlevel_server  # type: ignore[attr-defined]
+        init_options = lowlevel.create_initialization_options()
+    except Exception:  # noqa: BLE001 - ImportError or AttributeError on other mcp versions
+        return False
+
+    def refuse(request_id: Any) -> Any:
+        error = mcp_types.ErrorData(code=mcp_types.METHOD_NOT_FOUND, message="Method not found: server/discover")
+        return SessionMessage(mcp_types.JSONRPCError(jsonrpc="2.0", id=request_id, error=error))
+
+    async def serve() -> None:
+        async with stdio_server() as (read, write):
+            await lowlevel.run(_LegacyOnlyRead(read, write, refuse), write, init_options)
+
+    anyio.run(serve)
+    return True
+
+
 def build_bridge(workspace: str | None) -> Bridge:
     root = resolve_workspace_root(workspace)
     load_env_files()
@@ -250,7 +325,8 @@ def main(argv: list[str] | None = None) -> None:
 
     if _bridge is not None:
         log.info("workspace %s, audit log %s", _bridge.s.workspace_root, _bridge.s.log_path)
-    mcp.run("stdio")
+    if not _run_stdio_legacy_only():
+        mcp.run("stdio")
 
 
 if __name__ == "__main__":

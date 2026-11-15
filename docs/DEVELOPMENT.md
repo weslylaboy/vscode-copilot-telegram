@@ -72,7 +72,7 @@ No test uses the real Telegram API or needs a token. `VSCODE_COPILOT_TELEGRAM_AP
 
 Do these in order, in a new Agent chat in your project. Each one must pass.
 
-The Telegram checks below need the message on Telegram without waiting. Put `vscode_wait_s = 10` in `vscode-copilot-telegram.toml` (restart the server), and do not answer the VS Code form. Or use `vscode_wait_s = 0` to skip the form.
+The Telegram checks below need the message on Telegram without waiting. Put `vscode_wait_s = 10` in `vscode-copilot-telegram.toml` (start a new chat, so the server reads it), and do not answer the VS Code form. Or use `vscode_wait_s = 0` to skip the form.
 
 - [ ] VS Code form: with the default `vscode_wait_s`, ask `Use run_command to run git status`. A form appears in the chat. Choose approve. The command runs, and you get no Telegram message.
 - [ ] Telegram after the wait: with `vscode_wait_s = 10`, ask the same and do not answer. After 10 seconds a message arrives that says "No answer in VS Code", and the form is still open. Tap Approve. The form closes (this needs `mcp` 2.x) and Copilot reports the result.
@@ -95,7 +95,7 @@ The Telegram checks below need the message on Telegram without waiting. Put `vsc
 - [ ] Audit log: the file has one line for each request, with `decision` values like `approved`, `denied`, `denied-timeout`, `blocked`, `rejected`.
 - [ ] Allow list: add `allow = ['git status']` to the TOML and restart the server. The output warns that it is not accepted. Ask for `git status`: Telegram asks. Run `--accept-policy` in a normal terminal and in the VS Code terminal, and type `accept`. Restart and ask again: it shows Auto-approved without buttons. Add a second pattern, restart, and check that it asks again.
 - [ ] Accept refuses scripts: `echo accept | vscode-copilot-telegram --accept-policy --workspace PROJECT` prints `must be run by you` and saves nothing.
-- [ ] Restart: restart the server. Tap a button on an old request. It says Already answered or expired. Nothing runs twice.
+- [ ] Restart: restart the server and start a new chat. Tap a button on an old request. It says Already answered or expired. Nothing runs twice.
 - [ ] `/pending`: while a request waits, send `/pending` to the bot. It lists the request id.
 
 If something breaks in a real run, please add a test or a fixture for it.

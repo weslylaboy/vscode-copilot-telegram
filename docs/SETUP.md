@@ -333,7 +333,7 @@ Approve in VS Code:
 
 Approve on Telegram:
 
-1. To test it fast, add this line to `PROJECT/vscode-copilot-telegram.toml` and restart the server (**MCP: List Servers**, then **Restart**). The default is `180`, which means 3 minutes.
+1. To test it fast, add this line to `PROJECT/vscode-copilot-telegram.toml` and start a new chat, so the server reads it (see [A change has no effect](TROUBLESHOOTING.md#a-change-has-no-effect)). The default is `180`, which means 3 minutes.
 
    ```toml
    vscode_wait_s = 10
@@ -342,7 +342,7 @@ Approve on Telegram:
 2. Write: `Use run_command to run git status`. Do not answer the form.
 3. After 10 seconds you get a message in Telegram with the command, the reason, the folder, and three buttons. The form in VS Code is still open.
 4. Tap Approve. The message changes to show the exit code and the output. Copilot shows the result, and the form closes.
-5. Change `vscode_wait_s` back to `180` (or remove the line), and restart the server.
+5. Change `vscode_wait_s` back to `180` (or remove the line), and start a new chat.
 
 Deny:
 
@@ -370,7 +370,7 @@ git pull
 pip install -e .
 ```
 
-Run it with the venv active. Then restart the server (**MCP: List Servers**, then **Restart**) and the watcher.
+Run it with the venv active. Then restart the server (**MCP: List Servers**, then **Restart**) and the watcher, and start a new chat. A chat keeps the server it started with. See [A change has no effect](TROUBLESHOOTING.md#a-change-has-no-effect).
 
 ## Uninstall
 

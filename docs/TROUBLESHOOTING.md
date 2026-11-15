@@ -8,6 +8,7 @@ First, look at the logs:
 
 Problems:
 
+- [A change has no effect](#a-change-has-no-effect)
 - [No Telegram messages](#no-telegram-messages)
 - [The question does not come to Telegram, or no form appears in VS Code](#the-question-does-not-come-to-telegram-or-no-form-appears-in-vs-code)
 - [Buttons do not answer](#buttons-do-not-answer)
@@ -21,6 +22,21 @@ Problems:
 - [Commands fail on Windows](#commands-fail-on-windows)
 - [Copilot uses the wrong GitHub account](#copilot-uses-the-wrong-github-account)
 - [Remote Tunnels are blocked](#remote-tunnels-are-blocked)
+
+## A change has no effect
+
+You changed `vscode-copilot-telegram.toml`, updated the tool, or changed the code, but Copilot behaves as before.
+
+VS Code runs two copies of the server. The editor has one. The Copilot runtime has its own, and it starts a new one for each chat. A copy never reloads: it keeps the code and the settings it started with.
+
+**MCP: List Servers**, then **Restart**, only restarts the editor's copy. Your chat keeps using its own copy.
+
+To use the change:
+
+1. Start a **new chat** in the project (agent mode, Copilot harness). It starts a fresh server.
+2. Or stop and start the server for the chat you have: **Chat: Open Customizations**, then **MCP Servers**, then the server.
+
+To check which copy answered: the `via` field of the newest line in the audit log shows where an approval came from (`vscode` or `telegram`). A line for the server with "connected" in the Copilot log (`agenthost.log` in the VS Code logs folder) shows when the runtime started it.
 
 ## No Telegram messages
 
@@ -52,7 +68,7 @@ Copilot asks in VS Code first. The same question goes to Telegram after `vscode_
 
 | What you see | What it means |
 | --- | --- |
-| Nothing in Telegram for 3 minutes | This is normal. The form in VS Code is waiting for you. Answer it, or wait. To test faster, set `vscode_wait_s = 10` in `vscode-copilot-telegram.toml` and restart the server. |
+| Nothing in Telegram for 3 minutes | This is normal. The form in VS Code is waiting for you. Answer it, or wait. To test faster, set `vscode_wait_s = 10` in `vscode-copilot-telegram.toml` and start a new chat (see [A change has no effect](#a-change-has-no-effect)). |
 | The message in Telegram comes at once | VS Code cannot show the form, so the server skipped the wait. Look for `VS Code did not take the question` in the output of the server. The chat may be in Autopilot, or your VS Code does not support forms for MCP servers. |
 | No form in VS Code, and the message comes at once | Same as above. Telegram still works, so you are not blocked. |
 | The form stays open in VS Code after you answered on Telegram | You use `mcp` 1.x, which does not close it. Install `mcp` 2.x (`pip install -U mcp`) and restart the server. Answers to the old form are ignored. |

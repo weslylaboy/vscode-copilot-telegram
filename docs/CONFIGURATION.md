@@ -36,7 +36,7 @@ One bot for each project: keep one file outside the project, like `~/.config/vsc
 
 ## The TOML file
 
-Create `PROJECT/vscode-copilot-telegram.toml`. You can start from [examples/vscode-copilot-telegram.toml](../examples/vscode-copilot-telegram.toml). An unknown key is an error, so a typo is not silent. Restart the server after you change it (**MCP: List Servers**, then **Restart**).
+Create `PROJECT/vscode-copilot-telegram.toml`. You can start from [examples/vscode-copilot-telegram.toml](../examples/vscode-copilot-telegram.toml). An unknown key is an error, so a typo is not silent. Restart the server after you change it (**MCP: List Servers**, then **Restart**), and start a new chat. A chat keeps the server it started with. See [A change has no effect](TROUBLESHOOTING.md#a-change-has-no-effect).
 
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |

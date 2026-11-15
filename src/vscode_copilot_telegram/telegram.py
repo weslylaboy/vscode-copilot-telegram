@@ -7,10 +7,15 @@ processes never fight over getUpdates (Telegram allows one poller per bot).
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
 
 import httpx
+
+# httpx logs every request URL at INFO, and a Bot API URL contains the token.
+for _name in ("httpx", "httpcore"):
+    logging.getLogger(_name).setLevel(logging.WARNING)
 
 API_BASE = "https://api.telegram.org"
 MAX_MESSAGE = 4096
